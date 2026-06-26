@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{{ dept_name }} · Gatepass Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{teal:"#2b8a99",tealdark:"#1f6f7a",tealhover:"#247380",muted:"#6b7785",
+    pendbg:"#f0dcb4",pendtx:"#8a6a35",okbg:"#cdeedd",oktx:"#1c7a48",nobg:"#f6d6d2",notx:"#b23b30"}}}};</script>
+  <style>@keyframes slidein{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}.slidein{animation:slidein .25s ease-out}</style>
+</head>
+<body class="h-full bg-[#e9ecef] text-slate-800 antialiased">
+<header class="bg-white shadow-sm relative z-40">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
+      <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
+      <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-teal/10 text-teal font-semibold">{{ dept_name }}</span>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <!-- Notification bell -->
+      <div class="relative">
+        <button id="bell-btn" class="relative p-2 text-slate-500 hover:text-teal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="bell-badge" class="hidden absolute -top-1 -right-1 text-[10px] min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-red-500 text-white font-bold">0</span>
+        </button>
+        <div id="notif-panel" class="hidden absolute right-0 top-full mt-2 w-80 max-h-96 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <span class="font-semibold text-sm">Notifications</span>
+          </div>
+          <div id="notif-list" class="overflow-y-auto max-h-72 divide-y divide-slate-100"></div>
+          <div id="notif-empty" class="text-center text-muted text-xs py-8">No notifications.</div>
+        </div>
+      </div>
+      <nav class="flex items-center gap-1 text-sm border-r border-slate-200 pr-3 mr-1">
+        <span class="font-medium text-slate-800">Dashboard</span>
+        <span class="text-slate-300 mx-1">|</span>
+        <a href="/dept/reports" class="text-muted hover:text-slate-700">Reports</a>
+        <span class="text-slate-300 mx-1">|</span>
+        <a href="/dept/archive" class="text-muted hover:text-slate-700">Archive</a>
+      </nav>
+      <button id="leave-btn" class="text-sm font-medium border rounded-lg px-3 py-1.5 transition" data-on="{{ is_on_leave | lower }}">
+        <span id="leave-label">{% if is_on_leave %}On Leave{% else %}Set On Leave{% endif %}</span>
+      </button>
+      <span class="text-sm text-slate-500 border-l border-slate-200 pl-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">{{ "Head" if role == "dept_head" else "OIC" }}</span></span>
+      <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8 space-y-10">
+  <!-- Pending -->
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold">Gatepass Requests</h2>
+      <span id="pcount" class="text-xs font-medium px-2.5 py-1 rounded-full bg-pendbg text-pendtx">0 pending</span>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+      <table class="w-full text-sm min-w-[700px]"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+        <th class="text-left font-semibold px-4 py-3">Name</th>
+        <th class="text-left font-semibold px-4 py-3">Dept</th>
+        <th class="text-left font-semibold px-4 py-3">Purpose</th>
+        <th class="text-left font-semibold px-4 py-3">Back by</th>
+        <th class="text-left font-semibold px-4 py-3">Delegation</th>
+        <th class="text-left font-semibold px-4 py-3">Status</th>
+        <th class="text-right font-semibold px-4 py-3">Action</th>
+      </tr></thead><tbody id="ptable"></tbody></table>
+      <div id="pempty" class="text-center text-muted text-sm py-12">No pending requests.</div>
+    </div>
+  </section>
+
+  <!-- Currently out -->
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold">Currently Out</h2>
+      <span id="ocount" class="text-xs font-medium px-2.5 py-1 rounded-full bg-okbg text-oktx">0 out</span>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+      <table class="w-full text-sm min-w-[600px]"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+        <th class="text-left font-semibold px-4 py-3">Name</th>
+        <th class="text-left font-semibold px-4 py-3">Dept</th>
+        <th class="text-left font-semibold px-4 py-3">Purpose</th>
+        <th class="text-left font-semibold px-4 py-3">Outside Since</th>
+        <th class="text-left font-semibold px-4 py-3">Expected Back</th>
+        <th class="text-left font-semibold px-4 py-3">Decided By</th>
+      </tr></thead><tbody id="otable"></tbody></table>
+      <div id="oempty" class="text-center text-muted text-sm py-12">Nobody out.</div>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold">Gatepass Log</h2>
+      <select id="filter" class="bg-white border border-slate-300 rounded-lg text-sm px-3 py-1.5 focus:border-teal focus:outline-none">
+        <option value="all">All</option><option value="approved">Approved</option>
+        <option value="denied">Denied</option><option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option><option value="pending">Pending</option>
+      </select>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+      <table class="w-full text-sm min-w-[700px]"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+        <th class="text-left font-semibold px-4 py-3">Name</th>
+        <th class="text-left font-semibold px-4 py-3">Purpose</th>
+        <th class="text-left font-semibold px-4 py-3">Status</th>
+        <th class="text-left font-semibold px-4 py-3">Decided By</th>
+        <th class="text-left font-semibold px-4 py-3">Requested</th>
+        <th class="text-left font-semibold px-4 py-3">Returned</th>
+        <th class="text-right font-semibold px-4 py-3">Slip</th>
+      </tr></thead><tbody id="ltable"></tbody></table>
+      <div id="lempty" class="text-center text-muted text-sm py-12">No records.</div>
+    </div>
+  </section>
+</main>
+
+<div id="toasts" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+<!-- Leave confirmation modal -->
+<div id="leave-modal" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center px-4">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+    <h3 id="leave-modal-title" class="text-base font-semibold"></h3>
+    <p id="leave-modal-body" class="text-sm text-slate-600"></p>
+    <div class="flex gap-3 pt-1">
+      <button id="leave-modal-cancel" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
+      <button id="leave-modal-ok" class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const DEPT_NAME   = {{ dept_name | tojson }};
+  const ROLE        = "{{ role }}";
+  const MY_USER_ID  = {{ user_id if user_id is defined else "null" }};
+  let   IS_ON_LEAVE = {{ "true" if is_on_leave else "false" }};
+
+  function badge(s){const m={pending:"bg-pendbg text-pendtx",pending_nurse:"bg-purple-100 text-purple-700",approved:"bg-okbg text-oktx",denied:"bg-nobg text-notx",completed:"bg-slate-200 text-slate-600",cancelled:"bg-slate-200 text-slate-500"};
+    return `<span class="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full ${m[s]||''}">${s.replace("_"," ")}</span>`;}
+  function purposeLabel(g){if(g.purpose==="Sickness / Illness")return`Sickness${g.recommendation?" — "+g.recommendation:""}`;return g.purpose;}
+  function delegLabel(g){
+    if(g.delegated_to&&g.delegated_to!=="null")return`<span class="text-xs text-orange-600 font-medium">Delegated to ${g.delegated_to}</span>`;
+    if(g.accepted_by_dept)return`<span class="text-xs text-blue-600 font-medium">Accepted by ${g.accepted_by_dept}</span>`;
+    return`<span class="text-xs text-muted">—</span>`;}
+  function toast(html,b="border-teal"){const t=document.createElement("div");t.className=`slidein bg-white border-l-4 ${b} rounded-xl px-4 py-3 shadow-lg w-80`;t.innerHTML=html;document.getElementById("toasts").appendChild(t);setTimeout(()=>t.remove(),6000);}
+
+  // ---- Pending ---- //
+  const ptable=document.getElementById("ptable"),pempty=document.getElementById("pempty");
+  function prow(g){const tr=document.createElement("tr");tr.id="p-"+g.id;tr.className="border-b border-slate-100 last:border-0";
+    // Can only act if: pending AND (not delegated, OR delegated TO this dept)
+    const delegatedAway = g.delegated_to && g.delegated_to !== DEPT_NAME;
+    const canAct = g.status==="pending" && !delegatedAway;
+    tr.innerHTML=`<td class="px-4 py-3 font-semibold">${g.name}</td>
+      <td class="px-4 py-3 text-muted">${g.department}</td>
+      <td class="px-4 py-3">${purposeLabel(g)}</td>
+      <td class="px-4 py-3 font-mono">${g.return_time}</td>
+      <td class="px-4 py-3">${delegLabel(g)}</td>
+      <td class="px-4 py-3">${badge(g.status)}</td>
+      <td class="px-4 py-3 text-right whitespace-nowrap">
+        <a href="/api/gatepass/${g.id}/pdf" target="_blank" class="inline-block border border-teal/40 text-teal hover:bg-teal/5 rounded-lg px-2.5 py-1.5 text-xs font-semibold mr-1">Slip</a>
+        ${canAct
+          ? `<button data-act="approve" data-id="${g.id}" class="bg-teal hover:bg-tealhover text-white font-semibold rounded-lg px-3 py-1.5 text-xs">Accept</button>
+             <button data-act="deny" data-id="${g.id}" class="bg-[#dc6b62] text-white font-semibold rounded-lg px-3 py-1.5 text-xs ml-1">Decline</button>`
+          : delegatedAway
+            ? `<span class="text-xs text-slate-400 italic">Awaiting ${g.delegated_to}</span>`
+            : ""}
+      </td>`;return tr;}
+  function syncP(){const n=ptable.children.length;pempty.classList.toggle("hidden",n>0);document.getElementById("pcount").textContent=n+" pending";}
+  function belongsToMe(g){
+    if(g.assigned_to_user_id!=null)return g.assigned_to_user_id===MY_USER_ID;
+    return g.department===DEPT_NAME||g.delegated_to===DEPT_NAME;
+  }
+  function upsertP(g){const ex=document.getElementById("p-"+g.id);
+    if(g.status!=="pending"){if(ex)ex.remove();syncP();return;}
+    if(!belongsToMe(g)){if(ex)ex.remove();syncP();return;}
+    if(!ex)ptable.prepend(prow(g));syncP();}
+
+  async function decide(id,act){
+    const r=await fetch(`/api/gatepass/${id}/${act}`,{method:"POST"});
+    if(!r.ok){const d=await r.json().catch(()=>({}));toast(`<p class="text-sm font-semibold text-red-600">Error</p><p class="text-xs">${d.detail||"Failed"}</p>`,"border-red-500");return;}
+    const el=document.getElementById("p-"+id);if(el)el.remove();syncP();loadLog();loadOut();}
+  ptable.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)decide(b.dataset.id,b.dataset.act);});
+
+  // ---- Log ---- //
+  const ltable=document.getElementById("ltable"),lempty=document.getElementById("lempty");
+  async function loadLog(){const f=document.getElementById("filter").value;
+    const r=await fetch("/api/gatepasses?scope=all");let rows=await r.json();
+    if(f!=="all")rows=rows.filter(g=>g.status===f);ltable.innerHTML="";
+    rows.forEach(g=>{const tr=document.createElement("tr");tr.className="border-b border-slate-100 last:border-0";
+      const decidedBy=g.decided_by_name||g.accepted_by_dept||"—";
+      tr.innerHTML=`<td class="px-4 py-3 font-semibold">${g.name}</td>
+        <td class="px-4 py-3">${purposeLabel(g)}</td><td class="px-4 py-3">${badge(g.status)}</td>
+        <td class="px-4 py-3 text-xs font-medium ${decidedBy!=="—"?"text-tealdark":"text-slate-400"}">${decidedBy}</td>
+        <td class="px-4 py-3 font-mono text-xs text-muted">${g.created_at}</td>
+        <td class="px-4 py-3 font-mono text-xs font-semibold ${g.returned_at?"text-blue-600":"text-slate-400"}">${g.returned_at?g.returned_at.slice(11,16):"—"}</td>
+        <td class="px-4 py-3 text-right"><a href="/api/gatepass/${g.id}/pdf" target="_blank" class="border border-teal/40 text-teal hover:bg-teal/5 rounded-lg px-2.5 py-1 text-xs font-semibold">PDF</a></td>`;
+      ltable.appendChild(tr);});lempty.classList.toggle("hidden",rows.length>0);}
+  document.getElementById("filter").addEventListener("change",loadLog);
+
+  // ---- Out ---- //
+  const otable=document.getElementById("otable"),oempty=document.getElementById("oempty");
+  async function loadOut(){const r=await fetch("/api/gatepasses?scope=out");const rows=await r.json();
+    otable.innerHTML="";rows.forEach(g=>{const tr=document.createElement("tr");tr.className="border-b border-slate-100 last:border-0";
+      tr.innerHTML=`<td class="px-4 py-3 font-semibold">${g.name}</td><td class="px-4 py-3 text-muted">${g.department}</td>
+        <td class="px-4 py-3">${purposeLabel(g)}</td>
+        <td class="px-4 py-3 font-mono text-xs">${g.left_at?g.left_at.slice(11,16):"Not yet out"}</td>
+        <td class="px-4 py-3 font-mono">${g.return_time}</td>
+        <td class="px-4 py-3 text-xs font-medium ${(g.decided_by_name||g.accepted_by_dept)?"text-tealdark":"text-slate-400"}">${g.decided_by_name||g.accepted_by_dept||"—"}</td>`;
+      otable.appendChild(tr);});oempty.classList.toggle("hidden",rows.length>0);
+    document.getElementById("ocount").textContent=rows.length+" out";}
+
+  // ---- Notifications ---- //
+  let notifs=[];
+  document.getElementById("bell-btn").addEventListener("click", async () => {
+    const panel = document.getElementById("notif-panel");
+    const isOpening = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden");
+    if (isOpening) {
+      // Mark all as read when the panel is opened
+      const unread = notifs.filter(n => !n.is_read);
+      if (unread.length) {
+        await fetch("/api/notifications/read-all", { method: "POST" });
+        notifs.forEach(n => n.is_read = true);
+        renderN();
+      }
+    }
+  });
+  document.addEventListener("click",e=>{if(!e.target.closest("#bell-btn")&&!e.target.closest("#notif-panel"))document.getElementById("notif-panel").classList.add("hidden");});
+  
+  function renderN(){const nl=document.getElementById("notif-list"),ne=document.getElementById("notif-empty"),bb=document.getElementById("bell-badge");
+    nl.innerHTML="";const u=notifs.filter(n=>!n.is_read).length;bb.textContent=u;bb.classList.toggle("hidden",u===0);
+    if(!notifs.length){ne.classList.remove("hidden");return;}ne.classList.add("hidden");
+    notifs.slice(0,50).forEach(n=>{const d=document.createElement("div");
+      d.className=`px-4 py-3 text-sm cursor-pointer hover:bg-slate-50 ${n.is_read?"text-muted":"text-slate-800 bg-teal/5"}`;
+      d.innerHTML=`<p>${n.message}</p><p class="text-xs text-muted mt-0.5">${n.created_at}</p>`;
+      d.addEventListener("click",async()=>{if(!n.is_read){await fetch(`/api/notifications/${n.id}/read`,{method:"POST"});n.is_read=true;renderN();}});
+      nl.appendChild(d);});}
+  async function loadNotifs(){const r=await fetch(`/api/notifications?target=${ROLE}`);if(r.ok){notifs=await r.json();renderN();}}
+
+  // ---- SSE + polling ---- //
+  const es=new EventSource("/api/events");
+  es.addEventListener("new_request",e=>{const g=JSON.parse(e.data);
+    if(!belongsToMe(g))return;
+    upsertP(g);
+    toast(`<p class="text-sm font-semibold text-tealdark">New request</p><p class="text-sm">${g.name}</p><p class="text-xs text-muted">${purposeLabel(g)}</p>`);});
+  es.addEventListener("status_update",e=>{const g=JSON.parse(e.data);upsertP(g);loadLog();loadOut();});
+  es.addEventListener("notification",e=>{const n=JSON.parse(e.data);if(!n.target_role||n.target_role===ROLE){notifs.unshift(n);renderN();}});
+
+  // Full reconciliation every 5s — handles SSE drops and cross-dept delegation updates
+  async function reconcile(){
+    try{
+      const r=await fetch("/api/gatepasses?scope=all");
+      if(!r.ok)return;
+      const all=await r.json();
+
+      // 1. Reconcile PENDING table
+      const currentlyPending=new Set(all.filter(g=>g.status==="pending"&&belongsToMe(g)).map(g=>g.id));
+      // Remove cards that are no longer pending (status changed while SSE was down)
+      [...ptable.querySelectorAll("tr[id^='p-']")].forEach(tr=>{
+        const id=Number(tr.id.slice(2));
+        if(!currentlyPending.has(id))tr.remove();
+      });
+      // Add/re-render pending cards (re-render catches content changes like accepted_by_dept)
+      all.filter(g=>g.status==="pending"&&belongsToMe(g)).forEach(g=>{
+        const ex=document.getElementById("p-"+g.id);
+        if(!ex){ptable.prepend(prow(g));}
+        else{ex.innerHTML=prow(g).innerHTML;}  // re-render in-place without removing
+      });
+      syncP();
+
+      // 2. Refresh OUT table
+      const out=all.filter(g=>g.status==="approved"&&!g.returned_at);
+      otable.innerHTML="";
+      out.forEach(g=>{const tr=document.createElement("tr");tr.className="border-b border-slate-100 last:border-0";
+        tr.innerHTML=`<td class="px-4 py-3 font-semibold">${g.name}</td><td class="px-4 py-3 text-muted">${g.department}</td>
+          <td class="px-4 py-3">${purposeLabel(g)}</td>
+          <td class="px-4 py-3 font-mono text-xs">${g.left_at?g.left_at.slice(11,16):"Not yet out"}</td>
+          <td class="px-4 py-3 font-mono">${g.return_time}</td>
+          <td class="px-4 py-3 text-xs font-medium ${(g.decided_by_name||g.accepted_by_dept)?"text-tealdark":"text-slate-400"}">${g.decided_by_name||g.accepted_by_dept||"—"}</td>`;
+        otable.appendChild(tr);});
+      oempty.classList.toggle("hidden",out.length>0);
+      document.getElementById("ocount").textContent=out.length+" out";
+
+      // 3. Refresh LOG (reuse same data — no extra fetch)
+      const f=document.getElementById("filter").value;
+      const logRows=f==="all"?all:all.filter(g=>g.status===f);
+      ltable.innerHTML="";
+      logRows.forEach(g=>{const tr=document.createElement("tr");tr.className="border-b border-slate-100 last:border-0";
+        const rDecidedBy=g.decided_by_name||g.accepted_by_dept||"—";
+        tr.innerHTML=`<td class="px-4 py-3 font-semibold">${g.name}</td>
+          <td class="px-4 py-3">${purposeLabel(g)}</td><td class="px-4 py-3">${badge(g.status)}</td>
+          <td class="px-4 py-3 text-xs font-medium ${rDecidedBy!=="—"?"text-tealdark":"text-slate-400"}">${rDecidedBy}</td>
+          <td class="px-4 py-3 font-mono text-xs text-muted">${g.created_at}</td>
+          <td class="px-4 py-3 font-mono text-xs font-semibold ${g.returned_at?"text-blue-600":"text-slate-400"}">${g.returned_at?g.returned_at.slice(11,16):"—"}</td>
+          <td class="px-4 py-3 text-right"><a href="/api/gatepass/${g.id}/pdf" target="_blank" class="border border-teal/40 text-teal hover:bg-teal/5 rounded-lg px-2.5 py-1 text-xs font-semibold">PDF</a></td>`;
+        ltable.appendChild(tr);});
+      lempty.classList.toggle("hidden",logRows.length>0);
+    }catch(_){}
+  }
+  setInterval(reconcile,5000);
+
+  (async()=>{const r=await fetch("/api/gatepasses?scope=pending");if(!r.ok){location.href="/login";return;}
+    (await r.json()).reverse().forEach(upsertP);syncP();loadLog();loadOut();loadNotifs();})();
+
+  // ---- On-leave toggle ---- //
+  (function(){
+    const btn = document.getElementById("leave-btn");
+    if(!btn) return;
+    function applyLeaveStyle(){
+      if(IS_ON_LEAVE){
+        btn.className="text-sm font-medium border border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition";
+        document.getElementById("leave-label").textContent="On Leave";
+      } else {
+        btn.className="text-sm font-medium border border-slate-300 text-slate-600 hover:border-slate-400 rounded-lg px-3 py-1.5 transition";
+        document.getElementById("leave-label").textContent="Set On Leave";
+      }
+    }
+    applyLeaveStyle();
+    btn.addEventListener("click", ()=>{
+      // Show confirmation before toggling
+      const willBeOnLeave = !IS_ON_LEAVE;
+      document.getElementById("leave-modal-title").textContent = willBeOnLeave ? "Set yourself as on leave?" : "Clear on leave status?";
+      document.getElementById("leave-modal-body").textContent = willBeOnLeave
+        ? "Your name will be hidden from approver dropdowns. Staff will not be able to assign requests to you until you clear this."
+        : "Your name will become available again in approver dropdowns.";
+      document.getElementById("leave-modal").classList.remove("hidden");
+    });
+    document.getElementById("leave-modal-cancel").addEventListener("click", ()=>{
+      document.getElementById("leave-modal").classList.add("hidden");
+    });
+    document.getElementById("leave-modal-ok").addEventListener("click", async()=>{
+      document.getElementById("leave-modal").classList.add("hidden");
+      btn.disabled=true;
+      const r=await fetch("/api/me/on-leave",{method:"POST"});
+      btn.disabled=false;
+      if(!r.ok){toast("<p class=\"text-sm text-red-600\">Failed to update leave status.</p>","border-red-500");return;}
+      const d=await r.json();
+      IS_ON_LEAVE=d.is_on_leave;
+      applyLeaveStyle();
+      toast(`<p class="text-sm font-medium">${IS_ON_LEAVE?"You are now marked as on leave. Your name is hidden from approver lists.":"Leave status cleared. You are now available as an approver."}</p>`);
+    });
+  })();
+</script>
+</body>
+</html>

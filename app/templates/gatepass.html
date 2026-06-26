@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Request a Gatepass</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: {
+      colors: { teal:"#2b8a99", tealdark:"#1f6f7a", tealhover:"#247380",
+                pendbg:"#f0dcb4", pendtx:"#8a6a35" },
+      fontFamily: { mono:["ui-monospace","SFMono-Regular","Menlo","monospace"] },
+    } } };
+  </script>
+</head>
+<body class="h-full bg-slate-100 text-slate-900 antialiased">
+  <main class="min-h-full px-4 py-8 max-w-md mx-auto">
+
+    <header class="flex items-center gap-2.5 mb-6">
+      <div class="h-9 w-9"><img src="/static/logo.png" alt="CPFI" class="h-full w-full object-contain"/></div>
+      <div>
+        <h1 class="font-bold text-tealdark leading-tight">Gatepass Control</h1>
+        <p class="text-xs text-slate-500">Permission to leave the premises</p>
+      </div>
+    </header>
+
+    <!-- STATE: gate -->
+    <section id="gate" class="hidden bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <h2 id="gate-title" class="font-semibold">Scan the gatepass QR</h2>
+      <p id="gate-msg" class="mt-1 text-sm text-slate-500">Open your phone camera and scan the QR shown at the guard desk to begin.</p>
+    </section>
+
+    <!-- STATE: choice -->
+    <section id="choice" class="hidden bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-3">
+      <p class="text-sm font-medium">How are you submitting this request?</p>
+      <button id="choice-staff"
+        class="w-full border border-slate-300 hover:border-teal rounded-lg px-4 py-3 text-sm text-left font-medium text-slate-700 transition">
+        Staff
+      </button>
+      <button id="choice-oic"
+        class="w-full border border-slate-300 hover:border-teal rounded-lg px-4 py-3 text-sm text-left font-medium text-slate-700 transition">
+        OIC - log in with my account
+      </button>
+    </section>
+
+    <!-- STATE: OIC login -->
+    <section id="oic-login" class="hidden bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+      <h2 class="font-semibold text-sm">OIC Login</h2>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Username or Email</label>
+        <input id="hl-user" type="text" autocomplete="username"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:ring-1 focus:ring-teal focus:outline-none"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
+        <input id="hl-pass" type="password" autocomplete="current-password"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:ring-1 focus:ring-teal focus:outline-none"/>
+      </div>
+      <p id="hl-error" class="hidden text-sm text-red-600"></p>
+      <button id="hl-submit"
+        class="w-full bg-teal hover:bg-tealhover text-white font-semibold rounded-lg py-2.5 text-sm transition">
+        Log in and continue
+      </button>
+      <button id="hl-back" class="text-sm text-slate-500 hover:text-slate-700">Back</button>
+    </section>
+
+    <!-- STATE: QR access password -->
+    <section id="pwgate" class="hidden bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+      <h2 class="font-semibold text-sm">Access Password</h2>
+      <p class="text-sm text-slate-500">Enter the password provided at the guard desk.</p>
+      <div>
+        <input id="qr-pw" type="password" placeholder="Access password"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:ring-1 focus:ring-teal focus:outline-none"/>
+        <p id="qr-pw-error" class="hidden mt-2 text-sm text-red-600"></p>
+      </div>
+      <button id="qr-pw-submit"
+        class="w-full bg-teal hover:bg-tealhover text-white font-semibold rounded-lg py-2.5 text-sm transition">
+        Continue
+      </button>
+      <button id="pw-back" class="text-sm text-slate-500 hover:text-slate-700">Back</button>
+    </section>
+
+    <!-- STATE: Staff request form -->
+    <section id="form" class="hidden bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+      <div class="flex justify-between items-center text-xs text-slate-500">
+        <span class="text-green-700 font-medium">QR verified</span>
+        <span>Date: <span id="today" class="font-medium text-slate-700"></span></span>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Your name</label>
+        <select id="employee"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none">
+          <option value="">Select your name…</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Your ID number</label>
+        <input id="id-input" type="text" placeholder="e.g. 202400200"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:ring-1 focus:ring-teal focus:outline-none font-mono"/>
+        <p id="id-error" class="hidden mt-1 text-xs text-red-600">Incorrect ID number. Please check and try again.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Department</label>
+        <input id="dept-display" type="text" readonly
+          class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-600"/>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Purpose</label>
+        <select id="purpose"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none">
+          <option value="" disabled selected>Select purpose…</option>
+          <option>Undertime</option>
+          <option>Lunch Out</option>
+          <option>Official Business</option>
+          <option>Sickness / Illness</option>
+          <option>Others</option>
+        </select>
+      </div>
+
+      <!-- Official Business: specify field -->
+      <div id="official-wrap" class="hidden">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Please specify</label>
+        <input id="official_specify" type="text"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      </div>
+
+      <!-- Others: specify field -->
+      <div id="other-wrap" class="hidden">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Please specify</label>
+        <input id="other_specify" type="text"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      </div>
+
+      <div id="sick-wrap" class="hidden border border-slate-200 rounded-lg p-3 space-y-3">
+        <p class="text-xs font-medium text-slate-600">Due to sickness or illness</p>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Medical diagnosis</label>
+          <input id="diagnosis" type="text" placeholder="e.g. Fever, migraine"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+        </div>
+        <p class="text-xs text-slate-500">The clinic nurse will set the recommendation.</p>
+      </div>
+
+      <div id="return-wrap">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Expected return time</label>
+        <input id="return_time" type="time"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      </div>
+
+      <!-- Approver selection -->
+      <div id="approver-section" class="hidden border border-slate-200 rounded-lg p-3 space-y-3">
+        <!-- Head status info (shown when a name is selected) -->
+        <p id="head-status-msg" class="text-xs text-slate-500"></p>
+
+        <!-- Delegation checkbox (shown when a name is selected) -->
+        <label id="delegate-toggle-row" class="hidden flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" id="delegate-toggle" class="mt-0.5 rounded border-slate-300 text-teal"/>
+          <span class="text-xs text-slate-600">My department head is not available — select a department and OIC</span>
+        </label>
+
+        <!-- Cross-dept selection (shown when checkbox is checked) -->
+        <div id="delegate-wrap" class="hidden space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Department</label>
+            <select id="approver-dept"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none">
+              <option value="">Select department…</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">OIC</label>
+            <select id="approver-user"
+              class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:border-teal focus:outline-none">
+              <option value="">Select a department first…</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <p id="form-error" class="hidden text-sm text-red-600"></p>
+      <button id="submit"
+        class="w-full bg-teal hover:bg-tealhover text-white font-semibold rounded-lg py-2.5 text-sm transition">
+        Submit request
+      </button>
+    </section>
+
+    <!-- STATE: confirmation -->
+    <section id="confirm" class="hidden bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div class="mb-4">
+        <span id="status-badge" class="text-xs font-semibold uppercase px-2 py-1 rounded-full bg-pendbg text-pendtx">Pending</span>
+      </div>
+      <h2 id="status-title" class="font-semibold">Request submitted</h2>
+      <p id="status-sub" class="mt-1 text-sm text-slate-500">Waiting for approval…</p>
+
+      <dl class="mt-4 text-sm divide-y divide-slate-100 border-t border-slate-100">
+        <div class="flex justify-between py-2"><dt class="text-slate-500">Name</dt><dd id="c-name" class="font-medium"></dd></div>
+        <div class="flex justify-between py-2"><dt class="text-slate-500">Purpose</dt><dd id="c-purpose"></dd></div>
+        <div class="flex justify-between py-2"><dt class="text-slate-500">Back by</dt><dd id="c-return" class="font-mono"></dd></div>
+        <div class="flex justify-between py-2"><dt class="text-slate-500">Approver</dt><dd id="c-approver" class="font-medium"></dd></div>
+      </dl>
+
+      <div class="mt-4 space-y-2">
+        <a id="slip" href="#" target="_blank" rel="noopener"
+           class="block w-full border border-slate-300 hover:border-teal rounded-lg py-2 text-sm font-medium text-slate-700 text-center transition">
+          View / print slip (PDF)
+        </a>
+        <button id="cancel-btn"
+          class="block w-full border border-slate-300 hover:border-red-400 rounded-lg py-2 text-sm font-medium text-slate-600 hover:text-red-600 text-center transition">
+          Cancel request
+        </button>
+        <button id="new-request" class="hidden w-full text-sm font-medium text-teal hover:text-tealhover py-1">
+          Submit another request
+        </button>
+      </div>
+      <p id="confirm-error" class="hidden mt-2 text-sm text-red-600"></p>
+    </section>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token") || "{{ token }}";
+    const STORE_KEY = "gp_request";
+
+    const $ = id => document.getElementById(id);
+    const STATES = ["gate","choice","oic-login","pwgate","form","confirm"];
+    const show = id => STATES.forEach(s => $(s).classList.toggle("hidden", s !== id));
+
+    let qrPasswordOK = false, verifiedPassword = "";
+    let currentGpId = null;
+
+    // ---- Boot ---- //
+    async function start() {
+      const savedId = localStorage.getItem(STORE_KEY);
+      if (savedId) {
+        try {
+          const r = await fetch(`/api/gatepass/${savedId}`, { cache: "no-store" });
+          if (r.ok) {
+            const g = await r.json();
+            if (["pending_nurse","pending","approved"].includes(g.status)) {
+              currentGpId = Number(savedId);
+              renderConfirm(g); show("confirm"); watch(currentGpId); return;
+            }
+          }
+          localStorage.removeItem(STORE_KEY);
+        } catch (_) {}
+      }
+      if (!token) { show("gate"); return; }
+      const r = await fetch("/api/validate-token", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ token }),
+      });
+      const d = await r.json();
+      if (!d.valid) {
+        $("gate-title").textContent = "QR code expired";
+        $("gate-msg").textContent = "That code is no longer valid. Please scan the current QR at the guard desk.";
+        show("gate"); return;
+      }
+      show("choice");
+    }
+
+    // ---- Choice ---- //
+    $("choice-staff").addEventListener("click", () => {
+      if (qrPasswordOK) showStaffForm();
+      else { show("pwgate"); $("qr-pw").focus(); }
+    });
+    $("choice-oic").addEventListener("click", () => { show("oic-login"); $("hl-user").focus(); });
+
+    // ---- OIC login ---- //
+    $("hl-back").addEventListener("click", () => show("choice"));
+    $("hl-submit").addEventListener("click", oicLogin);
+    $("hl-pass").addEventListener("keydown", e => { if (e.key === "Enter") oicLogin(); });
+
+    async function oicLogin() {
+      const username = $("hl-user").value.trim();
+      const password = $("hl-pass").value;
+      const err = $("hl-error");
+      err.classList.add("hidden");
+      if (!username || !password) {
+        err.textContent = "Please enter your username and password.";
+        err.classList.remove("hidden"); return;
+      }
+      $("hl-submit").disabled = true;
+      $("hl-submit").textContent = "Logging in…";
+      await fetch("/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: new URLSearchParams({ username, password }),
+        redirect: "manual",
+      });
+      $("hl-submit").disabled = false;
+      $("hl-submit").textContent = "Log in and continue";
+      const check = await fetch("/api/oic-approvers?dept=__check__", { credentials: "include" });
+      if (check.ok || check.status === 400) {
+        window.location.href = "/oic-gatepass";
+      } else {
+        err.textContent = "Incorrect username or password, or your account does not have OIC access.";
+        err.classList.remove("hidden");
+      }
+    }
+
+    // ---- QR password ---- //
+    $("qr-pw-submit").addEventListener("click", verifyQrPassword);
+    $("qr-pw").addEventListener("keydown", e => { if (e.key === "Enter") verifyQrPassword(); });
+    $("pw-back").addEventListener("click", () => show("choice"));
+
+    async function verifyQrPassword() {
+      const pw = $("qr-pw").value;
+      const err = $("qr-pw-error");
+      err.classList.add("hidden");
+      if (!pw) { err.textContent = "Please enter the access password."; err.classList.remove("hidden"); return; }
+      const r = await fetch("/api/verify-qr-password", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ password: pw }),
+      });
+      const d = await r.json();
+      if (!d.valid) { err.textContent = "Incorrect password."; err.classList.remove("hidden"); return; }
+      qrPasswordOK = true; verifiedPassword = pw;
+      await showStaffForm();
+    }
+
+    // ---- Staff form ---- //
+    let staffData = [], allDepts = [];
+
+    async function showStaffForm() {
+      $("today").textContent = new Date().toLocaleDateString();
+      await loadStaff();
+      show("form");
+    }
+
+    async function loadStaff() {
+      const [sr, dr, ar] = await Promise.all([
+        fetch("/api/staff"), fetch("/api/departments"), fetch("/api/active-employees"),
+      ]);
+      staffData = await sr.json();
+      let busyIds = [];
+      try { busyIds = await ar.json(); } catch (_) {}
+      const busy = new Set(busyIds);
+      const sel = $("employee");
+      sel.length = 1;
+      staffData.filter(s => !busy.has(s.employee_id)).forEach(s => {
+        const o = document.createElement("option");
+        o.value = s.employee_id; o.textContent = s.name;
+        sel.appendChild(o);
+      });
+      allDepts = await dr.json();
+    }
+
+    // When name changes: check head availability, show approver section
+    $("employee").addEventListener("change", async () => {
+      const eid = $("employee").value;
+      const staff = staffData.find(s => s.employee_id === eid);
+      const myDept = staff ? staff.department : "";
+      $("dept-display").value = myDept;
+      $("id-input").value = "";
+      $("id-error").classList.add("hidden");
+
+      // Reset delegation state
+      $("delegate-toggle").checked = false;
+      $("delegate-toggle").disabled = false;
+      $("delegate-wrap").classList.add("hidden");
+      $("approver-user").innerHTML = '<option value="">Select a department first…</option>';
+
+      if (!myDept) {
+        $("approver-section").classList.add("hidden");
+        $("delegate-toggle-row").classList.add("hidden");
+        return;
+      }
+
+      // Check whether the dept head is available
+      const hdr = await fetch(`/api/dept-head-available?dept=${encodeURIComponent(myDept)}`);
+      const { available, username: headName } = await hdr.json();
+
+      // Show the approver section
+      $("approver-section").classList.remove("hidden");
+
+      if (available) {
+        // Head is available — no selection needed, just inform the user
+        $("head-status-msg").textContent = `Your request will be sent to your department head (${headName}).`;
+        $("delegate-toggle-row").classList.remove("hidden");
+        $("delegate-toggle").checked = false;
+        $("delegate-toggle").disabled = false;
+      } else {
+        // No head available — force delegation, auto-check and lock the checkbox
+        $("head-status-msg").textContent = "Your department head is not available. Please select an OIC to route your request to.";
+        $("delegate-toggle-row").classList.remove("hidden");
+        $("delegate-toggle").checked = true;
+        $("delegate-toggle").disabled = true;
+        $("delegate-wrap").classList.remove("hidden");
+      }
+
+      // Populate department dropdown for delegation — includes own dept so staff
+      // can pick an OIC from their own department too
+      const dsel = $("approver-dept");
+      dsel.innerHTML = '<option value="">Select department…</option>';
+      allDepts.forEach(d => {
+        const o = document.createElement("option");
+        o.value = d; o.textContent = d; dsel.appendChild(o);
+      });
+    });
+
+    // Delegation checkbox toggle
+    $("delegate-toggle").addEventListener("change", () => {
+      const checked = $("delegate-toggle").checked;
+      $("delegate-wrap").classList.toggle("hidden", !checked);
+    });
+
+    // Cross-dept department change: load OICs for that dept
+    $("approver-dept").addEventListener("change", async () => {
+      const dept = $("approver-dept").value;
+      const asel = $("approver-user");
+      asel.innerHTML = '<option value="">Loading…</option>';
+      if (!dept) { asel.innerHTML = '<option value="">Select a department first…</option>'; return; }
+      const r = await fetch(`/api/approvers-for-dept?dept=${encodeURIComponent(dept)}`);
+      const approvers = await r.json();
+
+      // Own department → OICs only; different department → Head and OICs
+      const staff = staffData.find(s => s.employee_id === $("employee").value);
+      const myDept = staff ? staff.department : "";
+      const filtered = (dept === myDept)
+        ? approvers.filter(a => a.role === "dept_oic")
+        : approvers;
+
+      asel.innerHTML = '<option value="">Select approver…</option>';
+      if (filtered.length === 0) {
+        asel.innerHTML = `<option value="">No active ${dept === myDept ? "OICs" : "approvers"} in this department</option>`;
+        return;
+      }
+      filtered.forEach(a => {
+        const o = document.createElement("option");
+        o.value = a.id;
+        o.textContent = a.role === "dept_head" ? `${a.username} (Head)` : a.username;
+        asel.appendChild(o);
+      });
+    });
+
+    // Purpose change
+    $("purpose").addEventListener("change", () => {
+      const p = $("purpose").value;
+      $("official-wrap").classList.toggle("hidden", p !== "Official Business");
+      $("other-wrap").classList.toggle("hidden", p !== "Others");
+      $("sick-wrap").classList.toggle("hidden", p !== "Sickness / Illness");
+      const rt = $("return_time"), rw = $("return-wrap");
+      if (p === "Lunch Out") {
+        rt.value = "13:00"; rt.readOnly = true; rw.classList.remove("hidden");
+      } else if (p === "Undertime" || p === "Sickness / Illness") {
+        rt.value = ""; rw.classList.add("hidden");
+      } else {
+        rt.value = ""; rt.readOnly = false; rw.classList.remove("hidden");
+      }
+    });
+
+    // Submit
+    $("submit").addEventListener("click", async () => {
+      const employee_id = $("employee").value;
+      const purpose = $("purpose").value;
+      const err = $("form-error");
+      err.classList.add("hidden");
+
+      if (!employee_id) { err.textContent = "Please select your name."; err.classList.remove("hidden"); return; }
+      const enteredId = $("id-input").value.trim();
+      if (!enteredId) { err.textContent = "Please enter your ID number."; err.classList.remove("hidden"); return; }
+      if (enteredId !== employee_id) {
+        $("id-error").classList.remove("hidden");
+        err.textContent = "Incorrect ID number."; err.classList.remove("hidden"); return;
+      }
+      if (!purpose) { err.textContent = "Please select a purpose."; err.classList.remove("hidden"); return; }
+
+      const needsReturn = purpose === "Official Business" || purpose === "Others";
+      const return_time = $("return_time").value || null;
+      if (needsReturn && !return_time) {
+        err.textContent = "Please choose an expected return time."; err.classList.remove("hidden"); return;
+      }
+
+      // Determine approver: if delegating, a specific OIC must be chosen;
+      // otherwise send null and the server auto-assigns the dept head.
+      const isDelegating = $("delegate-toggle").checked;
+      let assigned_to_user_id = null;
+      if (isDelegating) {
+        if (!$("approver-user").value) {
+          err.textContent = "Please select an OIC from the other department."; err.classList.remove("hidden"); return;
+        }
+        assigned_to_user_id = parseInt($("approver-user").value);
+      }
+
+      let notes = null, diagnosis = null;
+      if (purpose === "Official Business") {
+        notes = $("official_specify").value.trim();
+        if (!notes) { err.textContent = "Please specify the official business."; err.classList.remove("hidden"); return; }
+      } else if (purpose === "Others") {
+        notes = $("other_specify").value.trim();
+        if (!notes) { err.textContent = "Please specify the purpose."; err.classList.remove("hidden"); return; }
+      } else if (purpose === "Sickness / Illness") {
+        diagnosis = $("diagnosis").value.trim();
+        if (!diagnosis) { err.textContent = "Please enter the medical diagnosis."; err.classList.remove("hidden"); return; }
+      }
+
+      $("submit").disabled = true; $("submit").textContent = "Submitting…";
+
+      const r = await fetch("/api/gatepass", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ token, employee_id, purpose, return_time, notes, diagnosis,
+          qr_password: verifiedPassword, assigned_to_user_id }),
+      });
+
+      $("submit").disabled = false; $("submit").textContent = "Submit request";
+
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        err.textContent = d.detail || "Could not submit. Please re-scan the QR.";
+        err.classList.remove("hidden"); return;
+      }
+
+      const gp = await r.json();
+      currentGpId = gp.id;
+      localStorage.setItem(STORE_KEY, String(gp.id));
+      renderConfirm(gp); show("confirm"); watch(gp.id);
+    });
+
+    // Cancel
+    $("cancel-btn").addEventListener("click", async () => {
+      if (!currentGpId) return;
+      $("confirm-error").classList.add("hidden");
+      $("cancel-btn").disabled = true; $("cancel-btn").textContent = "Cancelling…";
+      const r = await fetch(`/api/gatepass/${currentGpId}/cancel`, { method: "POST" });
+      $("cancel-btn").disabled = false; $("cancel-btn").textContent = "Cancel request";
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        $("confirm-error").textContent = d.detail || "Could not cancel.";
+        $("confirm-error").classList.remove("hidden"); return;
+      }
+      const gp = await r.json();
+      renderConfirm(gp);
+    });
+
+    $("new-request").addEventListener("click", () => {
+      localStorage.removeItem(STORE_KEY);
+      currentGpId = null;
+      show("choice");
+    });
+
+    // Confirm screen
+    function renderConfirm(g) {
+      $("c-name").textContent = g.name;
+      let p = g.purpose;
+      if (g.notes) p = `${g.purpose} — ${g.notes}`;
+      else if (g.purpose === "Sickness / Illness") p = `Sickness${g.recommendation ? " — " + g.recommendation : ""}`;
+      $("c-purpose").textContent = p;
+      $("c-return").textContent = g.return_time;
+      $("c-approver").textContent = g.assigned_to_username || "—";
+      $("slip").href = `/api/gatepass/${g.id}/pdf`;
+      applyStatus(g.status);
+    }
+
+    const STATUS_LABELS = {
+      pending: "Pending", pending_nurse: "Pending nurse review",
+      approved: "Approved", denied: "Denied", completed: "Completed", cancelled: "Cancelled"
+    };
+    const STATUS_BADGE = {
+      pending: "bg-pendbg text-pendtx",
+      pending_nurse: "bg-purple-100 text-purple-700",
+      approved: "bg-green-100 text-green-700",
+      denied: "bg-red-100 text-red-700",
+      completed: "bg-slate-200 text-slate-600",
+      cancelled: "bg-slate-200 text-slate-600",
+    };
+
+    function applyStatus(status) {
+      const badge = $("status-badge");
+      badge.textContent = STATUS_LABELS[status] || status;
+      badge.className = `text-xs font-semibold uppercase px-2 py-1 rounded-full ${STATUS_BADGE[status] || ""}`;
+      const isActive = ["pending","pending_nurse","approved"].includes(status);
+      $("cancel-btn").classList.toggle("hidden", !isActive || status === "approved");
+      $("new-request").classList.toggle("hidden", isActive);
+      const titles = {
+        pending: "Request submitted", pending_nurse: "Request submitted",
+        approved: "Approved — you may proceed",
+        denied: "Request denied", completed: "Request completed", cancelled: "Request cancelled",
+      };
+      const subs = {
+        pending: "Waiting for approval…",
+        pending_nurse: "The clinic nurse is reviewing your request.",
+        approved: "Show this screen to the guard at the gate.",
+        denied: "Please see your supervisor.",
+        completed: "Your return has been logged by the guard.",
+        cancelled: "Your request has been cancelled. You may submit a new one.",
+      };
+      $("status-title").textContent = titles[status] || status;
+      $("status-sub").textContent = subs[status] || "";
+      if (status === "completed" || status === "cancelled") localStorage.removeItem(STORE_KEY);
+    }
+
+    let _watcher = null;
+    function watch(id) {
+      if (_watcher) { try { _watcher.es && _watcher.es.close(); } catch (_) {} clearInterval(_watcher.t); }
+      let last = null, done = false;
+      const update = s => {
+        if (s === last) return; last = s; applyStatus(s);
+        if (["denied","completed","cancelled"].includes(s)) done = true;
+      };
+      let es = null;
+      try {
+        es = new EventSource("/api/events");
+        es.addEventListener("status_update", e => {
+          const g = JSON.parse(e.data);
+          if (Number(g.id) === Number(id)) { update(g.status); if (done && es) es.close(); }
+        });
+      } catch (_) {}
+      const t = setInterval(async () => {
+        if (done) { clearInterval(t); return; }
+        try { const r = await fetch(`/api/gatepass/${id}`,{cache:"no-store"}); if(r.ok){const g=await r.json();update(g.status);} } catch(_) {}
+      }, 5000);
+      _watcher = { es, t };
+      document.addEventListener("visibilitychange", () => { if (!document.hidden && !done) {
+        fetch(`/api/gatepass/${id}`,{cache:"no-store"}).then(r=>r.ok&&r.json()).then(g=>g&&update(g.status)).catch(()=>{});
+      }});
+    }
+
+    start();
+  </script>
+</body>
+</html>

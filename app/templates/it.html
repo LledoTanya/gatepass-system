@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IT · Gatepass Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{teal:"#2b8a99",tealdark:"#1f6f7a",tealhover:"#247380",muted:"#6b7785"}}}};</script>
+</head>
+<body class="h-full bg-[#e9ecef] text-slate-800 antialiased">
+  <header class="bg-white shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
+        <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
+        <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-teal/10 text-teal">IT</span>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <nav class="flex items-center gap-1 text-sm border-r border-slate-200 pr-3 mr-1" id="it-nav">
+          <button id="nav-accounts" class="font-medium text-slate-800" onclick="showTab('accounts')">Accounts</button>
+          <span class="text-slate-300 mx-1">|</span>
+          <button id="nav-staff" class="text-muted hover:text-slate-700" onclick="showTab('staff')">Staff</button>
+          <span class="text-slate-300 mx-1">|</span>
+          <button id="nav-audit" class="text-muted hover:text-slate-700" onclick="showTab('audit')">Audit Log</button>
+          <span class="text-slate-300 mx-1">|</span>
+          <button id="nav-settings" class="text-muted hover:text-slate-700" onclick="showTab('settings')">Settings</button>
+        </nav>
+        <span class="text-sm text-slate-500 border-r border-slate-200 pr-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">IT</span></span>
+        <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
+      </div>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+
+    <!-- Tab: Accounts -->
+    <div id="tab-accounts">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-bold">Manage Accounts</h2>
+        <button onclick="openUserModal()" class="bg-teal hover:bg-tealhover text-white font-semibold rounded-xl px-5 py-2.5 text-sm">+ New Account</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+          <th class="text-left font-semibold px-4 py-3">Username</th><th class="text-left font-semibold px-4 py-3">Email</th>
+          <th class="text-left font-semibold px-4 py-3">Role</th><th class="text-left font-semibold px-4 py-3">Department</th><th class="text-left font-semibold px-4 py-3">Status</th>
+          <th class="text-right font-semibold px-4 py-3">Actions</th>
+        </tr></thead><tbody id="utable"></tbody></table>
+        <div id="uempty" class="text-center text-muted text-sm py-12">No accounts.</div>
+      </div>
+      <h3 class="text-lg font-bold mt-8 mb-3">Password Reset Requests</h3>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+          <th class="text-left font-semibold px-4 py-3">Username</th><th class="text-left font-semibold px-4 py-3">Email</th>
+          <th class="text-left font-semibold px-4 py-3">Requested</th><th class="text-left font-semibold px-4 py-3">Status</th>
+          <th class="text-left font-semibold px-4 py-3 hidden md:table-cell">Temp PW</th>
+          <th class="text-right font-semibold px-4 py-3">Actions</th>
+        </tr></thead><tbody id="rrtable"></tbody></table>
+        <div id="rrempty" class="text-center text-muted text-sm py-12">No requests.</div>
+      </div>
+    </div>
+
+    <!-- Tab: Staff -->
+    <div id="tab-staff" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-bold">Manage Staff</h2>
+        <button onclick="openStaffModal()" class="bg-teal hover:bg-tealhover text-white font-semibold rounded-xl px-5 py-2.5 text-sm">+ Add Staff</button>
+      </div>
+      <div class="mb-4">
+        <select id="dept-filter" onchange="renderStaff()" class="bg-white border border-slate-300 rounded-lg text-sm px-3 py-1.5">
+          <option value="all">All Departments</option>
+        </select>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+          <th class="text-left font-semibold px-4 py-3">Employee ID</th><th class="text-left font-semibold px-4 py-3">Name</th>
+          <th class="text-left font-semibold px-4 py-3">Department</th>
+          <th class="text-right font-semibold px-4 py-3">Actions</th>
+        </tr></thead><tbody id="stable"></tbody></table>
+        <div id="sempty" class="text-center text-muted text-sm py-12">No staff records.</div>
+      </div>
+    </div>
+
+    <!-- Tab: Audit -->
+    <div id="tab-audit" class="hidden">
+      <h2 class="text-lg font-bold mb-3">Audit Log</h2>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+          <th class="text-left font-semibold px-4 py-3">Action</th><th class="text-left font-semibold px-4 py-3">Details</th>
+          <th class="text-left font-semibold px-4 py-3">By</th><th class="text-left font-semibold px-4 py-3">When</th>
+        </tr></thead><tbody id="atable"></tbody></table>
+        <div id="aempty" class="text-center text-muted text-sm py-12">No entries.</div>
+      </div>
+    </div>
+
+    <!-- Tab: Settings -->
+    <div id="tab-settings" class="hidden">
+      <h2 class="text-lg font-bold mb-3">QR Access Password</h2>
+      <div class="bg-white rounded-2xl shadow-sm p-6 max-w-lg space-y-4">
+        <p class="text-sm text-muted">Staff must enter this password after scanning the QR code before they can submit a gatepass request. Share it only with authorized staff.</p>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Current Password</label>
+          <input id="qrpw-current" type="text" readonly
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">New Password</label>
+          <input id="qrpw-new" type="text" placeholder="At least 4 characters"
+            class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+        </div>
+        <p id="qrpw-msg" class="hidden text-sm"></p>
+        <button onclick="saveQrPassword()"
+          class="bg-teal hover:bg-tealhover text-white font-semibold rounded-xl px-5 py-2.5 text-sm">Update Password</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Toast container -->
+  <div id="toasts" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+  <!-- User create/edit modal -->
+  <div id="umodal" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center px-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-3">
+      <h3 id="um-title" class="text-lg font-bold mb-1">New Account</h3>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Role</label>
+        <select id="um-role" onchange="toggleDeptField()" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none">
+          <option value="dept_head">Department Head</option>
+          <option value="dept_oic">Department OIC (Officer In Charge)</option>
+          <option value="guard">Guard</option>
+          <option value="it">IT</option>
+          <option value="nurse">Nurse</option>
+        </select>
+      </div>
+      <div id="um-dept-row">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Department</label>
+        <select id="um-dept" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none">
+          <option value="">Select department…</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
+        <input id="um-user" placeholder="e.g. guard01" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Email</label>
+        <input id="um-email" type="email" placeholder="e.g. guard@cpfi.local" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      </div>
+      <div id="um-pw-row">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
+        <input id="um-pw" type="password" placeholder="Minimum 6 characters" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      </div>
+      <p id="um-err" class="hidden text-sm text-red-600"></p>
+      <div class="flex gap-3 pt-1">
+        <button onclick="document.getElementById('umodal').classList.add('hidden')" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
+        <button onclick="saveUser()" class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password reset modal -->
+  <div id="pw-modal" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center px-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+      <h3 class="text-lg font-bold">Reset Password</h3>
+      <p class="text-sm text-muted">Account: <span id="pw-username" class="font-semibold text-slate-700"></span></p>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">New Password</label>
+        <input id="pw-input" type="password" placeholder="Minimum 6 characters"
+          class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      </div>
+      <p id="pw-err" class="hidden text-sm text-red-600"></p>
+      <div class="flex gap-3">
+        <button onclick="document.getElementById('pw-modal').classList.add('hidden')"
+          class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
+        <button onclick="confirmReset()"
+          class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Reset Password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Staff create/edit modal -->
+  <div id="smodal" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center px-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+      <h3 id="sm-title" class="text-lg font-bold">Add Staff</h3>
+      <input id="sm-eid" placeholder="Employee ID" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"/>
+      <input id="sm-name" placeholder="Full Name" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"/>
+      <select id="sm-dept" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"></select>
+      <p id="sm-err" class="hidden text-sm text-red-600"></p>
+      <div class="flex gap-3">
+        <button onclick="document.getElementById('smodal').classList.add('hidden')" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm">Cancel</button>
+        <button onclick="saveStaff()" class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic confirm modal -->
+  <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center px-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+      <h3 id="confirm-title" class="text-base font-semibold"></h3>
+      <p id="confirm-body" class="text-sm text-slate-600"></p>
+      <div class="flex gap-3 pt-1">
+        <button onclick="cancelConfirm()" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
+        <button id="confirm-ok" class="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white"></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allStaff=[], allDepts=[], editUserId=null, editStaffId=null, resetPwId=null;
+    let _confirmCb=null;
+
+    // ---- Toast ---- //
+    function toast(msg, ok=true){
+      const t=document.createElement("div");
+      t.className=`bg-white border-l-4 ${ok?"border-teal":"border-red-500"} rounded-xl px-4 py-3 shadow-lg w-80 text-sm`;
+      t.textContent=msg;
+      document.getElementById("toasts").appendChild(t);
+      setTimeout(()=>t.remove(), 5000);
+    }
+
+    // ---- Confirm modal ---- //
+    function openConfirm(title, body, okLabel, okClass, cb){
+      document.getElementById("confirm-title").textContent=title;
+      document.getElementById("confirm-body").textContent=body;
+      const ok=document.getElementById("confirm-ok");
+      ok.textContent=okLabel;
+      ok.className=`flex-1 rounded-xl py-2.5 text-sm font-semibold text-white ${okClass}`;
+      _confirmCb=cb;
+      document.getElementById("confirm-modal").classList.remove("hidden");
+    }
+    function cancelConfirm(){document.getElementById("confirm-modal").classList.add("hidden");_confirmCb=null;}
+    document.getElementById("confirm-ok").addEventListener("click",()=>{
+      document.getElementById("confirm-modal").classList.add("hidden");
+      if(_confirmCb){const cb=_confirmCb;_confirmCb=null;cb();}
+    });
+
+    // ---- Tabs ---- //
+    function showTab(t){
+      ['accounts','staff','audit','settings'].forEach(x=>{
+        document.getElementById('tab-'+x).classList.toggle('hidden',x!==t);
+        const nb=document.getElementById('nav-'+x);
+        if(nb){nb.className=x===t?'font-medium text-slate-800':'text-muted hover:text-slate-700';}});
+      if(t==='accounts'){loadUsers();loadRR();}
+      if(t==='staff')loadStaffData();
+      if(t==='audit')loadAudit();
+      if(t==='settings')loadQrPassword();
+    }
+
+    // ---- QR password ---- //
+    async function loadQrPassword(){
+      const r=await fetch('/api/qr-password');if(!r.ok)return;
+      const d=await r.json();
+      document.getElementById('qrpw-current').value=d.password||'';
+      document.getElementById('qrpw-new').value='';
+      document.getElementById('qrpw-msg').classList.add('hidden');
+    }
+    async function saveQrPassword(){
+      const newpw=document.getElementById('qrpw-new').value.trim();
+      const msg=document.getElementById('qrpw-msg');
+      msg.classList.add('hidden');
+      if(newpw.length<4){msg.textContent='Password must be at least 4 characters.';msg.className='text-sm text-red-600';msg.classList.remove('hidden');return;}
+      const r=await fetch('/api/qr-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:newpw})});
+      if(!r.ok){const j=await r.json().catch(()=>({}));msg.textContent=j.detail||'Error';msg.className='text-sm text-red-600';msg.classList.remove('hidden');return;}
+      toast('QR access password updated.');
+      loadQrPassword();loadAudit();
+    }
+
+    // ---- Accounts ---- //
+    function roleBadge(r){const c={dept_head:'bg-teal/10 text-teal',dept_oic:'bg-teal/5 text-teal',guard:'bg-slate-200 text-slate-600',it:'bg-purple-100 text-purple-700',nurse:'bg-pink-100 text-pink-700'};
+      return `<span class="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full ${c[r]||''}">${r}</span>`;}
+
+    async function loadUsers(){
+      const r=await fetch('/api/users');if(!r.ok){location.href='/login';return;}
+      const rows=await r.json();const tb=document.getElementById('utable');tb.innerHTML='';
+      rows.forEach(u=>{const tr=document.createElement('tr');tr.className='border-b border-slate-100 last:border-0';
+        tr.innerHTML=`<td class="px-4 py-3 font-semibold">${u.username}</td><td class="px-4 py-3 text-muted">${u.email}</td>
+          <td class="px-4 py-3">${roleBadge(u.role)}</td>
+          <td class="px-4 py-3 text-xs text-muted">${u.department||'—'}</td>
+          <td class="px-4 py-3"><span class="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full ${u.is_active?'bg-green-100 text-green-700':'bg-red-100 text-red-600'}">${u.is_active?'Active':'Inactive'}</span></td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button onclick='editUser(${JSON.stringify(u)})' class="text-xs font-semibold text-teal mr-2">Edit</button>
+            <button onclick="toggleUser(${u.id},${u.is_active},'${u.username}')" class="text-xs font-semibold ${u.is_active?'text-orange-500':'text-green-600'} mr-2">${u.is_active?'Deactivate':'Activate'}</button>
+            <button onclick="resetPwUser(${u.id},'${u.username}')" class="text-xs font-semibold text-slate-500 mr-2">Reset PW</button>
+            <button onclick="delUser(${u.id},'${u.username}')" class="text-xs font-semibold text-red-500">Delete</button></td>`;
+        tb.appendChild(tr);});document.getElementById('uempty').classList.toggle('hidden',rows.length>0);
+    }
+
+    async function loadDepts4Modal(){
+      const r=await fetch('/api/departments');const ds=await r.json();
+      const sel=document.getElementById('um-dept');
+      ds.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;sel.appendChild(o);});
+    }
+    loadDepts4Modal();
+
+    function toggleDeptField(){const role=document.getElementById('um-role').value;
+      const needsDept=role==='dept_head'||role==='dept_oic';
+      document.getElementById('um-dept-row').classList.toggle('hidden',!needsDept);
+      if(!needsDept)document.getElementById('um-dept').value='';}
+
+    function openUserModal(){editUserId=null;document.getElementById('um-title').textContent='New Account';
+      ['um-user','um-email','um-pw'].forEach(x=>document.getElementById(x).value='');
+      document.getElementById('um-role').value='dept_head';document.getElementById('um-dept').value='';
+      document.getElementById('um-pw-row').classList.remove('hidden');
+      document.getElementById('um-err').classList.add('hidden');toggleDeptField();document.getElementById('umodal').classList.remove('hidden');}
+
+    function editUser(u){editUserId=u.id;document.getElementById('um-title').textContent='Edit Account';
+      document.getElementById('um-user').value=u.username;document.getElementById('um-email').value=u.email;
+      document.getElementById('um-role').value=u.role;
+      document.getElementById('um-dept').value=u.department||'';
+      document.getElementById('um-pw-row').classList.add('hidden');
+      document.getElementById('um-err').classList.add('hidden');toggleDeptField();document.getElementById('umodal').classList.remove('hidden');}
+
+    async function saveUser(){
+      const e=document.getElementById('um-err');e.classList.add('hidden');
+      const role=document.getElementById('um-role').value;
+      const dept=document.getElementById('um-dept').value;
+      if((role==='dept_head'||role==='dept_oic')&&!dept){e.textContent='Please select a department.';e.classList.remove('hidden');return;}
+      const d={username:document.getElementById('um-user').value.trim(),email:document.getElementById('um-email').value.trim(),role,department:dept||null};
+      if(!d.username||!d.email){e.textContent='All fields required.';e.classList.remove('hidden');return;}
+      let r;
+      if(editUserId){r=await fetch(`/api/users/${editUserId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});}
+      else{d.password=document.getElementById('um-pw').value;if(!d.password||d.password.length<6){e.textContent='Password min 6 chars.';e.classList.remove('hidden');return;}
+        r=await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});}
+      if(!r.ok){const j=await r.json().catch(()=>({}));e.textContent=j.detail||'Error';e.classList.remove('hidden');return;}
+      document.getElementById('umodal').classList.add('hidden');
+      toast(editUserId?'Account updated.':'Account created.');
+      loadUsers();loadAudit();
+    }
+
+    function toggleUser(id, cur, name){
+      const action=cur?'deactivate':'activate';
+      openConfirm(
+        `${cur?'Deactivate':'Activate'} account`,
+        `${cur?'Deactivate':'Activate'} "${name}"?`,
+        cur?'Deactivate':'Activate',
+        cur?'bg-orange-500 hover:bg-orange-600':'bg-green-600 hover:bg-green-700',
+        async()=>{
+          const r=await fetch(`/api/users/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:!cur})});
+          if(!r.ok){toast('Failed to update account.',false);return;}
+          toast(`Account ${cur?'deactivated':'activated'}.`);
+          loadUsers();
+        }
+      );
+    }
+
+    function delUser(id, name){
+      openConfirm(
+        'Delete account',
+        `Permanently delete "${name}"? This cannot be undone.`,
+        'Delete',
+        'bg-red-600 hover:bg-red-700',
+        async()=>{
+          const r=await fetch(`/api/users/${id}`,{method:'DELETE'});
+          if(!r.ok){toast('Failed to delete account.',false);return;}
+          toast('Account deleted.');
+          loadUsers();loadAudit();
+        }
+      );
+    }
+
+    function resetPwUser(id, name){
+      resetPwId=id;
+      document.getElementById('pw-username').textContent=name;
+      document.getElementById('pw-input').value='';
+      document.getElementById('pw-err').classList.add('hidden');
+      document.getElementById('pw-modal').classList.remove('hidden');
+    }
+    async function confirmReset(){
+      const pw=document.getElementById('pw-input').value;const e=document.getElementById('pw-err');
+      if(!pw||pw.length<6){e.textContent='At least 6 characters required.';e.classList.remove('hidden');return;}
+      const r=await fetch(`/api/users/${resetPwId}/reset-password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+      if(!r.ok){e.textContent='Error resetting password.';e.classList.remove('hidden');return;}
+      document.getElementById('pw-modal').classList.add('hidden');
+      toast('Password reset successfully.');
+      loadAudit();
+    }
+
+    // ---- Reset Requests ---- //
+    async function loadRR(){
+      const r=await fetch('/api/guard-reset-requests');if(!r.ok)return;const rows=await r.json();
+      const tb=document.getElementById('rrtable');tb.innerHTML='';
+      rows.forEach(rr=>{const tr=document.createElement('tr');tr.className='border-b border-slate-100 last:border-0';
+        const p=rr.status==='pending';
+        tr.innerHTML=`<td class="px-4 py-3 font-semibold">${rr.username}</td><td class="px-4 py-3 text-muted">${rr.email}</td>
+          <td class="px-4 py-3 text-xs font-mono">${rr.created_at}</td>
+          <td class="px-4 py-3"><span class="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full ${p?'bg-yellow-100 text-yellow-700':rr.status==='approved'?'bg-green-100 text-green-700':'bg-red-100 text-red-600'}">${rr.status}</span></td>
+          <td class="px-4 py-3 hidden md:table-cell font-mono text-xs">${rr.temp_password||'—'}</td>
+          <td class="px-4 py-3 text-right">${p?`<button onclick="approveRR(${rr.id},'${rr.username}')" class="text-xs font-semibold bg-teal text-white rounded-lg px-3 py-1.5 mr-1">Approve</button><button onclick="rejectRR(${rr.id},'${rr.username}')" class="text-xs font-semibold bg-red-500 text-white rounded-lg px-3 py-1.5">Reject</button>`:''}</td>`;
+        tb.appendChild(tr);});document.getElementById('rrempty').classList.toggle('hidden',rows.length>0);
+    }
+
+    async function approveRR(id, username){
+      openConfirm(
+        'Approve reset request',
+        `Approve password reset for "${username}"? A temporary password will be generated.`,
+        'Approve',
+        'bg-teal hover:bg-tealhover',
+        async()=>{
+          const r=await fetch(`/api/guard-reset-requests/${id}/approve`,{method:'POST'});
+          if(!r.ok){toast('Failed to approve reset.',false);return;}
+          const d=await r.json();
+          // Show temp password in a non-blocking way
+          _showTempPw(d.username, d.temp_password);
+          loadRR();loadAudit();
+        }
+      );
+    }
+
+    function _showTempPw(username, pw){
+      // Reuse confirm modal to display the temp password (read-only, single OK button)
+      document.getElementById("confirm-title").textContent='Temporary password set';
+      document.getElementById("confirm-body").textContent=`Temporary password for "${username}": ${pw}`;
+      const ok=document.getElementById("confirm-ok");
+      ok.textContent='OK';
+      ok.className='flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-teal hover:bg-tealhover';
+      _confirmCb=null;
+      // Hide the cancel button for this case
+      document.querySelector('#confirm-modal .flex button:first-child').classList.add('hidden');
+      document.getElementById("confirm-modal").classList.remove("hidden");
+      const orig=document.getElementById("confirm-ok").onclick;
+      document.getElementById("confirm-ok").addEventListener("click",()=>{
+        document.querySelector('#confirm-modal .flex button:first-child').classList.remove('hidden');
+      },{once:true});
+    }
+
+    function rejectRR(id, username){
+      openConfirm(
+        'Reject reset request',
+        `Reject the password reset request from "${username}"?`,
+        'Reject',
+        'bg-red-600 hover:bg-red-700',
+        async()=>{
+          const r=await fetch(`/api/guard-reset-requests/${id}/reject`,{method:'POST'});
+          if(!r.ok){toast('Failed to reject.',false);return;}
+          toast('Reset request rejected.');
+          loadRR();
+        }
+      );
+    }
+
+    // ---- Staff ---- //
+    async function loadStaffData(){
+      const[sr,dr]=await Promise.all([fetch('/api/staff'),fetch('/api/departments')]);
+      allStaff=await sr.json();allDepts=await dr.json();
+      const sel=document.getElementById('dept-filter');sel.innerHTML='<option value="all">All Departments</option>';
+      allDepts.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;sel.appendChild(o);});
+      const smSel=document.getElementById('sm-dept');smSel.innerHTML='';
+      allDepts.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;smSel.appendChild(o);});
+      renderStaff();
+    }
+
+    function renderStaff(){const f=document.getElementById('dept-filter').value;
+      const filtered=f==='all'?allStaff:allStaff.filter(s=>s.department===f);
+      const tb=document.getElementById('stable');tb.innerHTML='';
+      filtered.forEach(s=>{const tr=document.createElement('tr');tr.className='border-b border-slate-100 last:border-0';
+        tr.innerHTML=`<td class="px-4 py-3 font-mono">${s.employee_id}</td><td class="px-4 py-3 font-semibold">${s.name}</td>
+          <td class="px-4 py-3 text-muted">${s.department}</td>
+          <td class="px-4 py-3 text-right whitespace-nowrap">
+            <button onclick='editStaff(${JSON.stringify(s)})' class="text-xs font-semibold text-teal mr-2">Edit</button>
+            <button onclick="delStaff(${s.id},'${s.name}')" class="text-xs font-semibold text-red-500">Delete</button></td>`;
+        tb.appendChild(tr);});document.getElementById('sempty').classList.toggle('hidden',filtered.length>0);
+    }
+
+    function openStaffModal(){editStaffId=null;document.getElementById('sm-title').textContent='Add Staff';
+      ['sm-eid','sm-name'].forEach(x=>document.getElementById(x).value='');
+      document.getElementById('sm-err').classList.add('hidden');document.getElementById('smodal').classList.remove('hidden');}
+
+    function editStaff(s){editStaffId=s.id;document.getElementById('sm-title').textContent='Edit Staff';
+      document.getElementById('sm-eid').value=s.employee_id;document.getElementById('sm-name').value=s.name;
+      document.getElementById('sm-dept').value=s.department;
+      document.getElementById('sm-err').classList.add('hidden');document.getElementById('smodal').classList.remove('hidden');}
+
+    async function saveStaff(){const e=document.getElementById('sm-err');e.classList.add('hidden');
+      const d={employee_id:document.getElementById('sm-eid').value.trim(),name:document.getElementById('sm-name').value.trim(),
+        department:document.getElementById('sm-dept').value};
+      if(!d.employee_id||!d.name){e.textContent='All fields required.';e.classList.remove('hidden');return;}
+      let r;
+      if(editStaffId){r=await fetch(`/api/staff/${editStaffId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});}
+      else{r=await fetch('/api/staff',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});}
+      if(!r.ok){const j=await r.json().catch(()=>({}));e.textContent=j.detail||'Error';e.classList.remove('hidden');return;}
+      document.getElementById('smodal').classList.add('hidden');
+      toast(editStaffId?'Staff record updated.':'Staff record added.');
+      loadStaffData();
+    }
+
+    function delStaff(id, name){
+      openConfirm(
+        'Delete staff record',
+        `Permanently delete "${name}" from the staff list?`,
+        'Delete',
+        'bg-red-600 hover:bg-red-700',
+        async()=>{
+          const r=await fetch(`/api/staff/${id}`,{method:'DELETE'});
+          if(!r.ok){toast('Failed to delete staff record.',false);return;}
+          toast('Staff record deleted.');
+          loadStaffData();
+        }
+      );
+    }
+
+    // ---- Audit ---- //
+    async function loadAudit(){const r=await fetch('/api/audit-log');if(!r.ok)return;const rows=await r.json();
+      const tb=document.getElementById('atable');tb.innerHTML='';
+      rows.forEach(a=>{const tr=document.createElement('tr');tr.className='border-b border-slate-100 last:border-0';
+        tr.innerHTML=`<td class="px-4 py-3 font-medium">${a.action}</td><td class="px-4 py-3">${a.details}</td>
+          <td class="px-4 py-3 text-muted">${a.performed_by}</td><td class="px-4 py-3 text-xs font-mono text-muted">${a.created_at}</td>`;
+        tb.appendChild(tr);});document.getElementById('aempty').classList.toggle('hidden',rows.length>0);}
+
+    showTab('accounts');
+
+    setInterval(()=>{
+      if(!document.getElementById('tab-accounts').classList.contains('hidden')){loadUsers();loadRR();}
+      else if(!document.getElementById('tab-staff').classList.contains('hidden')){loadStaffData();}
+      else if(!document.getElementById('tab-audit').classList.contains('hidden')){loadAudit();}
+    }, 5000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full"><head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Archive · {{ dept_name }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{teal:"#2b8a99",tealdark:"#1f6f7a",tealhover:"#247380",muted:"#6b7785",
+    okbg:"#cdeedd",oktx:"#1c7a48",nobg:"#f6d6d2",notx:"#b23b30"}}}};</script>
+</head>
+<body class="h-full bg-[#e9ecef] text-slate-800 antialiased">
+<header class="bg-white shadow-sm"><div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+  <div class="flex items-center gap-2.5">
+    <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
+    <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
+    <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-slate-200 text-slate-600">Archive · {{ dept_name }}</span>
+  </div>
+  <div class="flex items-center gap-3 text-sm">
+    <nav class="flex items-center gap-1 text-sm border-r border-slate-200 pr-3 mr-1">
+      <a href="/dept" class="text-muted hover:text-slate-700">Dashboard</a>
+      <span class="text-slate-300 mx-1">|</span>
+      <a href="/dept/reports" class="text-muted hover:text-slate-700">Reports</a>
+      <span class="text-slate-300 mx-1">|</span>
+      <span class="font-medium text-slate-800">Archive</span>
+    </nav>
+    <span class="text-sm text-slate-500 border-r border-slate-200 pr-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">{{ "Head" if role == "dept_head" else "OIC" }}</span></span>
+    <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
+  </div>
+</div></header>
+
+<main class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">Gatepass Archive</h1>
+      <p class="text-sm text-muted">Gatepasses automatically moved here after 24 hours.</p>
+    </div>
+    <input type="month" id="month-picker" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:border-teal focus:outline-none"/>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+    <table class="w-full text-sm min-w-[700px]"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+      <th class="text-left font-semibold px-4 py-3">Name</th>
+      <th class="text-left font-semibold px-4 py-3">Dept</th>
+      <th class="text-left font-semibold px-4 py-3">Purpose</th>
+      <th class="text-left font-semibold px-4 py-3">Status</th>
+      <th class="text-left font-semibold px-4 py-3">Requested</th>
+      <th class="text-left font-semibold px-4 py-3">Archived</th>
+      <th class="text-right font-semibold px-4 py-3">Slip</th>
+    </tr></thead><tbody id="atable"></tbody></table>
+    <div id="aempty" class="text-center text-muted text-sm py-12">No archived records.</div>
+  </div>
+</main>
+
+<script>
+  function badge(s){const m={approved:"bg-okbg text-oktx",denied:"bg-nobg text-notx",completed:"bg-slate-200 text-slate-600"};
+    return `<span class="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full ${m[s]||''}">${s}</span>`;}
+  function purposeLabel(g){if(g.purpose==="Sickness / Illness")return`Sickness${g.recommendation?" — "+g.recommendation:""}`;return g.purpose;}
+
+  async function load(){
+    const m=document.getElementById("month-picker").value;
+    const url=m?`/api/gatepasses/archive?month=${m}`:"/api/gatepasses/archive";
+    const r=await fetch(url);const rows=await r.json();
+    const tb=document.getElementById("atable");tb.innerHTML="";
+    rows.forEach(g=>{const tr=document.createElement("tr");tr.className="border-b border-slate-100 last:border-0";
+      tr.innerHTML=`<td class="px-4 py-3 font-semibold">${g.name}</td>
+        <td class="px-4 py-3 text-muted">${g.department}</td>
+        <td class="px-4 py-3">${purposeLabel(g)}</td>
+        <td class="px-4 py-3">${badge(g.status)}</td>
+        <td class="px-4 py-3 font-mono text-xs text-muted">${g.created_at}</td>
+        <td class="px-4 py-3 font-mono text-xs text-muted">${g.archived_at||"—"}</td>
+        <td class="px-4 py-3 text-right"><a href="/api/gatepass/${g.id}/pdf" target="_blank" class="border border-teal/40 text-teal rounded-lg px-2.5 py-1 text-xs font-semibold">PDF</a></td>`;
+      tb.appendChild(tr);});document.getElementById("aempty").classList.toggle("hidden",rows.length>0);}
+
+  function getDefaultMonth(){const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;}
+  document.getElementById("month-picker").value=getDefaultMonth();
+  document.getElementById("month-picker").addEventListener("change",load);
+  load();
+</script>
+</body></html>

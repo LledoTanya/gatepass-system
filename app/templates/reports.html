@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full"><head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reports · {{ dept_name }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{teal:"#2b8a99",tealdark:"#1f6f7a",tealhover:"#247380",muted:"#6b7785"}}}};</script>
+</head>
+<body class="h-full bg-[#e9ecef] text-slate-800 antialiased">
+<header class="bg-white shadow-sm"><div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+  <div class="flex items-center gap-2.5">
+    <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
+    <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
+    <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-teal/10 text-teal">{{ dept_name }}</span>
+  </div>
+  <div class="flex items-center gap-3 text-sm">
+    <nav class="flex items-center gap-1 text-sm border-r border-slate-200 pr-3 mr-1">
+      <a href="/dept" class="text-muted hover:text-slate-700">Dashboard</a>
+      <span class="text-slate-300 mx-1">|</span>
+      <span class="font-medium text-slate-800">Reports</span>
+      <span class="text-slate-300 mx-1">|</span>
+      <a href="/dept/archive" class="text-muted hover:text-slate-700">Archive</a>
+    </nav>
+    <span class="text-sm text-slate-500 border-r border-slate-200 pr-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">{{ "Head" if role == "dept_head" else "OIC" }}</span></span>
+    <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
+  </div>
+</div></header>
+
+<main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-bold">Monthly Reports</h1>
+    <input type="month" id="month-picker" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:border-teal focus:outline-none"/>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+    <div id="report-loading" class="text-center text-muted py-12">Loading...</div>
+    <table id="report-table" class="hidden w-full text-sm">
+      <thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200">
+        <tr id="report-header"></tr>
+      </thead>
+      <tbody id="report-body"></tbody>
+    </table>
+    <div id="report-empty" class="hidden text-center text-muted text-sm py-12">No records for this period.</div>
+  </div>
+</main>
+
+<script>
+  const MONTHS_BACK = 6;
+
+  function getDefaultMonth(){const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;}
+  document.getElementById("month-picker").value = getDefaultMonth();
+
+  function allMonths(data){
+    const ms=new Set();
+    data.forEach(e=>Object.keys(e.months||{}).forEach(m=>ms.add(m)));
+    return [...ms].sort();
+  }
+
+  async function loadReport(){
+    const m=document.getElementById("month-picker").value;
+    document.getElementById("report-loading").classList.remove("hidden");
+    document.getElementById("report-table").classList.add("hidden");
+    document.getElementById("report-empty").classList.add("hidden");
+    const r=await fetch(`/api/gatepasses/report?month=${m}`);
+    const data=await r.json();
+    document.getElementById("report-loading").classList.add("hidden");
+    if(!data.length){document.getElementById("report-empty").classList.remove("hidden");return;}
+    const months=allMonths(data);
+    const hdr=document.getElementById("report-header");
+    hdr.innerHTML=`<th class="text-left font-semibold px-4 py-3">Employee</th>`
+      +months.map(mo=>`<th class="text-center font-semibold px-4 py-3">${mo}</th>`).join("")
+      +`<th class="text-center font-semibold px-4 py-3">Total</th>`;
+    const body=document.getElementById("report-body"); body.innerHTML="";
+    data.forEach(e=>{
+      const tr=document.createElement("tr");tr.className="border-b border-slate-100 last:border-0";
+      let total=0;
+      const cells=months.map(mo=>{
+        const cnt=(e.months[mo]||{}).total||0; total+=cnt;
+        const breakdown=Object.entries((e.months[mo]||{}).purposes||{}).map(([p,c])=>`${p}:${c}`).join(", ");
+        return `<td class="text-center px-4 py-3" title="${breakdown}">${cnt||"—"}</td>`;
+      }).join("");
+      tr.innerHTML=`<td class="px-4 py-3 font-semibold">${e.name}<br><span class="text-xs text-muted font-mono">${e.employee_id}</span></td>${cells}<td class="text-center px-4 py-3 font-bold text-teal">${total}</td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById("report-table").classList.remove("hidden");
+  }
+
+  document.getElementById("month-picker").addEventListener("change",loadReport);
+  loadReport();
+</script>
+</body></html>

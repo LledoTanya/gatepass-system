@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nurse · Gatepass Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{teal:"#2b8a99",tealdark:"#1f6f7a",tealhover:"#247380",muted:"#6b7785",
+    pendbg:"#f0dcb4",pendtx:"#8a6a35",okbg:"#cdeedd",oktx:"#1c7a48",nobg:"#f6d6d2",notx:"#b23b30"}}}};</script>
+</head>
+<body class="h-full bg-[#e9ecef] text-slate-800 antialiased">
+  <header class="bg-white shadow-sm relative z-40">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
+        <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
+        <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-pink-100 text-pink-700">Nurse</span>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <!-- Bell -->
+        <div class="relative">
+          <button id="bell-btn" class="relative p-2 text-slate-500 hover:text-teal">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span id="bell-badge" class="hidden absolute -top-1 -right-1 text-[10px] min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-red-500 text-white font-bold">0</span>
+          </button>
+          <div id="notif-panel" class="hidden absolute right-0 top-full mt-2 w-80 max-h-96 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <span class="font-semibold text-sm">Notifications</span>
+            </div>
+            <div id="notif-list" class="overflow-y-auto max-h-72 divide-y divide-slate-100"></div>
+            <div id="notif-empty" class="text-center text-muted text-xs py-8">No notifications.</div>
+          </div>
+        </div>
+        <span class="text-sm text-slate-500 border-l border-slate-200 pl-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">Nurse</span></span>
+        <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 space-y-10">
+    <section>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-bold">Sickness / Illness Requests</h2>
+        <span id="pcount" class="text-xs font-medium px-2.5 py-1 rounded-full bg-pendbg text-pendtx">0 pending</span>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm"><thead class="text-muted text-xs uppercase tracking-wide border-b border-slate-200"><tr>
+          <th class="text-left font-semibold px-4 py-3">Name</th>
+          <th class="text-left font-semibold px-4 py-3 hidden sm:table-cell">Dept</th>
+          <th class="text-left font-semibold px-4 py-3">Diagnosis</th>
+          <th class="text-left font-semibold px-4 py-3">Recommendation</th>
+          <th class="text-left font-semibold px-4 py-3">Status</th>
+          <th class="text-right font-semibold px-4 py-3">Action</th>
+        </tr></thead><tbody id="ptable"></tbody></table>
+        <div id="pempty" class="text-center text-muted text-sm py-12">No pending sickness requests.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const ptable=document.getElementById("ptable"),pempty=document.getElementById("pempty");
+    function badge(s){const m={pending_nurse:"bg-pendbg text-pendtx",pending:"bg-blue-100 text-blue-700",approved:"bg-okbg text-oktx",denied:"bg-nobg text-notx"};
+      const label={pending_nurse:"Awaiting Review",pending:"Sent to Admin",approved:"Approved",denied:"Denied"};
+      return `<span class="text-[11px] font-semibold uppercase px-2.5 py-1 rounded-full ${m[s]||''}">${label[s]||s}</span>`;}
+
+    // Silent upsert — adds new rows, updates status/badges, never wipes existing rows
+    // so the nurse can keep her recommendation selection while the table auto-updates
+    let allSick = [];
+
+    function upsertRow(g){
+      const ex = document.getElementById("p-"+g.id);
+      if(!ex){
+        // New row — insert at top
+        ptable.insertBefore(prow(g), ptable.firstChild);
+      } else {
+        // Row exists — only re-render if status changed (don't touch the recommendation dropdown)
+        const curStatus = ex.querySelector(".status-badge")?.dataset.status;
+        if(curStatus !== g.status){
+          const fresh = prow(g);
+          ex.parentNode.replaceChild(fresh, ex);
+        }
+      }
+    }
+
+    function prow(g){const tr=document.createElement("tr");tr.id="p-"+g.id;tr.className="border-b border-slate-100 last:border-0";
+      const isPending=g.status==="pending_nurse";
+      tr.innerHTML=`<td class="px-4 py-3 font-semibold">${g.name}<div class="text-xs text-muted sm:hidden">${g.department}</div></td>
+        <td class="px-4 py-3 hidden sm:table-cell text-muted">${g.department}</td>
+        <td class="px-4 py-3">${g.diagnosis||"—"}</td>
+        <td class="px-4 py-3">${g.recommendation||"—"}</td>
+        <td class="px-4 py-3"><span class="status-badge" data-status="${g.status}">${badge(g.status)}</span></td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">${isPending?`
+          <select data-rec="${g.id}" class="border border-slate-300 rounded-lg px-2 py-1 text-xs mr-1">
+            <option value="">Recommendation…</option>
+            <option>Go Home / Advise to Rest</option>
+            <option>Check-up / Re-check</option>
+            <option>Referred to Hospital / Outside Clinic</option>
+          </select>
+          <button data-approve="${g.id}" class="bg-teal hover:bg-tealhover text-white font-semibold rounded-lg px-3 py-1.5 text-xs">Approve</button>
+          <button data-deny="${g.id}" class="bg-red-500 text-white font-semibold rounded-lg px-3 py-1.5 text-xs ml-1">Deny</button>
+        `:`<span class="text-xs text-muted">${g.nurse_decided_by||""}</span>`}</td>`;
+      return tr;}
+
+    function syncP(){pempty.classList.toggle("hidden",ptable.children.length>0);
+      const pending=ptable.querySelectorAll('[data-approve]').length;
+      document.getElementById("pcount").textContent=pending+" pending";}
+
+    // Initial full load (only on first open)
+    async function loadRequests(){
+      const r=await fetch("/api/gatepasses?scope=all");if(!r.ok){location.href="/login";return;}
+      allSick=(await r.json()).filter(g=>g.purpose==="Sickness / Illness");
+      ptable.innerHTML="";
+      allSick.forEach(g=>ptable.appendChild(prow(g)));syncP();}
+
+    // Silent sync — merges without wiping (preserves dropdown selections in progress)
+    async function silentSync(){
+      try{
+        const r=await fetch("/api/gatepasses?scope=all");if(!r.ok)return;
+        const fresh=(await r.json()).filter(g=>g.purpose==="Sickness / Illness");
+        const freshIds=new Set(fresh.map(g=>g.id));
+        // Remove rows no longer present
+        [...ptable.querySelectorAll("tr[id^='p-']")].forEach(tr=>{
+          if(!freshIds.has(Number(tr.id.slice(2))))tr.remove();
+        });
+        // Upsert each fresh row
+        fresh.forEach(upsertRow);
+        syncP();
+      }catch(_){}
+    }
+
+    ptable.addEventListener("click",async e=>{
+      const ab=e.target.closest("[data-approve]");
+      if(ab){
+        const id=ab.dataset.approve;
+        const sel=ptable.querySelector(`[data-rec="${id}"]`);
+        const rec=sel?sel.value:"";
+        if(!rec){alert("Please select a recommendation first.");return;}
+        await fetch(`/api/gatepass/${id}/nurse-approve`,{method:"POST",
+          headers:{"Content-Type":"application/json"},body:JSON.stringify({recommendation:rec})});
+        silentSync();return;}
+      const db=e.target.closest("[data-deny]");
+      if(db){await fetch(`/api/gatepass/${db.dataset.deny}/nurse-deny`,{method:"POST"});silentSync();}
+    });
+
+    // ---- Notifications ---- //
+    let notifs=[];
+    document.getElementById("bell-btn").addEventListener("click", async () => {
+    const panel = document.getElementById("notif-panel");
+    const isOpening = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden");
+    if (isOpening) {
+      // Mark all as read when the panel is opened
+      const unread = notifs.filter(n => !n.is_read);
+      if (unread.length) {
+        await fetch("/api/notifications/read-all", { method: "POST" });
+        notifs.forEach(n => n.is_read = true);
+        renderN();
+      }
+    }
+  });
+    document.addEventListener("click",e=>{if(!e.target.closest("#bell-btn")&&!e.target.closest("#notif-panel"))document.getElementById("notif-panel").classList.add("hidden");});
+    
+    function renderN(){const nl=document.getElementById("notif-list"),ne=document.getElementById("notif-empty"),bb=document.getElementById("bell-badge");
+      nl.innerHTML="";const u=notifs.filter(n=>!n.is_read).length;bb.textContent=u;bb.classList.toggle("hidden",u===0);
+      if(!notifs.length){ne.classList.remove("hidden");return;}ne.classList.add("hidden");
+      notifs.slice(0,50).forEach(n=>{const d=document.createElement("div");
+        d.className=`px-4 py-3 text-sm cursor-pointer hover:bg-slate-50 ${n.is_read?"text-muted":"text-slate-800 bg-teal/5"}`;
+        d.innerHTML=`<p>${n.message}</p><p class="text-xs text-muted mt-0.5">${n.created_at}</p>`;
+        d.addEventListener("click",async()=>{if(!n.is_read){await fetch(`/api/notifications/${n.id}/read`,{method:"POST"});n.is_read=true;renderN();}});
+        nl.appendChild(d);});}
+    async function loadNotifs(){const r=await fetch("/api/notifications?target=nurse");if(r.ok){notifs=await r.json();renderN();}}
+
+    // SSE for instant updates — silentSync for fallback (no DOM wipe)
+    const es=new EventSource("/api/events");
+    es.addEventListener("new_request",e=>{const g=JSON.parse(e.data);if(g.purpose==="Sickness / Illness"){upsertRow(g);syncP();}});
+    es.addEventListener("status_update",e=>{const g=JSON.parse(e.data);if(g.purpose==="Sickness / Illness"||allSick.find(s=>s.id===g.id)){upsertRow(g);syncP();}});
+    es.addEventListener("notification",e=>{notifs.unshift(JSON.parse(e.data));renderN();});
+    setInterval(silentSync,5000);
+
+    loadRequests();loadNotifs();
+  </script>
+</body>
+</html>

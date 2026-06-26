@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Archive · Guard · Gatepass Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{
+    teal:"#2b8a99",tealdark:"#1f6f7a",tealhover:"#247380",muted:"#6b7785",
+    okbg:"#cdeedd",oktx:"#1c7a48",nobg:"#f6d6d2",notx:"#b23b30"}}}};</script>
+  <style>
+    details>summary{list-style:none}
+    details>summary::-webkit-details-marker{display:none}
+    details[open]>summary .chevron{transform:rotate(90deg)}
+    .chevron{transition:transform .15s ease}
+  </style>
+</head>
+<body class="h-full bg-[#e9ecef] text-slate-800 antialiased">
+
+<header class="bg-white shadow-sm">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
+      <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
+      <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 font-semibold">Archive</span>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <nav class="flex items-center gap-1 text-sm border-r border-slate-200 pr-3 mr-1">
+        <a href="/guard" class="text-muted hover:text-slate-700">Active</a>
+        <span class="text-slate-300 mx-1">|</span>
+        <span class="font-medium text-slate-800">Archive</span>
+      </nav>
+      <span class="text-sm text-slate-500 border-r border-slate-200 pr-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">Guard</span></span>
+      <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+
+  <!-- Header + search -->
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Gatepass Archive</h1>
+      <p class="text-sm text-muted mt-0.5">All past requests older than 24 hours — organized by department, year, month, and day.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <input id="search" type="text" placeholder="Search name or ID…"
+        class="bg-white border border-slate-300 rounded-lg text-sm px-3 py-1.5 w-52 focus:border-teal focus:outline-none"/>
+      <select id="dept-jump" class="bg-white border border-slate-300 rounded-lg text-sm px-3 py-1.5 focus:border-teal focus:outline-none">
+        <option value="">Jump to dept…</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="bg-white rounded-xl p-4 shadow-sm text-center">
+      <p class="text-2xl font-bold text-tealdark" id="stat-total">—</p>
+      <p class="text-xs text-muted mt-0.5">Total Records</p>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm text-center">
+      <p class="text-2xl font-bold text-okbg-dark" id="stat-completed" style="color:#1c7a48">—</p>
+      <p class="text-xs text-muted mt-0.5">Completed</p>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm text-center">
+      <p class="text-2xl font-bold text-red-500" id="stat-denied">—</p>
+      <p class="text-xs text-muted mt-0.5">Denied</p>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm text-center">
+      <p class="text-2xl font-bold text-slate-700" id="stat-depts">—</p>
+      <p class="text-xs text-muted mt-0.5">Departments</p>
+    </div>
+  </div>
+
+  <!-- Tree -->
+  <div id="tree" class="space-y-3"></div>
+  <div id="empty" class="hidden text-center py-20 text-muted text-sm">No archived records found.</div>
+  <div id="loading" class="text-center py-20 text-muted text-sm">Loading archive…</div>
+</main>
+
+<script>
+  let allRows = [];
+
+  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  function badge(s){
+    const m={approved:"bg-okbg text-oktx",completed:"bg-okbg text-oktx",
+             denied:"bg-nobg text-notx"};
+    return `<span class="text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full ${m[s]||'bg-slate-200 text-slate-600'}">${s}</span>`;}
+
+  function purposeText(g){
+    if(g.purpose==="Sickness / Illness")return`Sickness${g.recommendation?" — "+g.recommendation:""}`;
+    return g.purpose;}
+
+  // ---- Build tree from flat data ---- //
+  function buildTree(rows){
+    // Group: dept → year → month → day → [records]
+    const tree = {};
+    rows.forEach(g=>{
+      const dt = g.created_at ? g.created_at.slice(0,10) : "0000-00-00";
+      const [year,month,day] = dt.split("-");
+      const dept = g.department || "Unknown";
+      if(!tree[dept]) tree[dept]={};
+      if(!tree[dept][year]) tree[dept][year]={};
+      if(!tree[dept][year][month]) tree[dept][year][month]={};
+      if(!tree[dept][year][month][day]) tree[dept][year][month][day]=[];
+      tree[dept][year][month][day].push(g);
+    });
+    return tree;
+  }
+
+  function rowHtml(g){
+    return `<div class="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+      <div class="min-w-0">
+        <p class="font-semibold text-slate-800 text-sm">${g.name}
+          <span class="ml-1 text-[11px] font-mono text-muted">${g.employee_id}</span>
+        </p>
+        <p class="text-xs text-muted mt-0.5">${purposeText(g)}</p>
+      </div>
+      <div class="flex items-center gap-3 shrink-0 text-xs">
+        <div class="text-right">
+          <span class="text-muted">Out:</span>
+          <span class="font-mono ${g.left_at?"text-green-700":"text-slate-400"} ml-1">${g.left_at?g.left_at.slice(11,16):"—"}</span>
+        </div>
+        <div class="text-right">
+          <span class="text-muted">In:</span>
+          <span class="font-mono font-semibold ${g.returned_at?"text-blue-600":"text-slate-400"} ml-1">${g.returned_at?g.returned_at.slice(11,16):"—"}</span>
+        </div>
+        ${badge(g.status)}
+        <a href="/api/gatepass/${g.id}/pdf" target="_blank"
+          class="border border-teal/40 text-teal hover:bg-teal/5 rounded-lg px-2.5 py-1 font-semibold">Slip</a>
+      </div>
+    </div>`;}
+
+  function daySection(dayStr, records, monthName, year){
+    const d = parseInt(dayStr);
+    const label = `${monthName} ${d}, ${year}`;
+    const count = records.length;
+    return `<details open>
+      <summary class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-100/60 rounded-lg">
+        <span class="chevron text-slate-400">›</span>
+        <span class="text-xs font-semibold text-slate-600">${label}</span>
+        <span class="ml-auto text-[11px] text-muted">${count} record${count!==1?"s":""}</span>
+      </summary>
+      <div class="mt-1 bg-white rounded-xl shadow-sm overflow-hidden border border-slate-100">
+        ${records.map(g=>rowHtml(g)).join("")}
+      </div>
+    </details>`;}
+
+  function monthSection(monthStr, days, year){
+    const mName = MONTH_NAMES[parseInt(monthStr)-1] || monthStr;
+    const total = Object.values(days).reduce((s,d)=>s+d.length,0);
+    const sortedDays = Object.keys(days).sort((a,b)=>b-a);  // newest day first
+    const inner = sortedDays.map(day=>daySection(day,days[day],mName,year)).join("");
+    return `<details open>
+      <summary class="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-50 rounded-t-xl">
+        <span class="chevron text-slate-500 font-bold">›</span>
+        <span class="text-sm font-semibold text-slate-700">${mName} ${year}</span>
+        <span class="ml-auto text-xs text-muted">${total} request${total!==1?"s":""}</span>
+      </summary>
+      <div class="px-3 pb-3 space-y-2">${inner}</div>
+    </details>`;}
+
+  function yearSection(yearStr, months){
+    const total = Object.values(months).reduce((s,m)=>s+Object.values(m).reduce((ss,d)=>ss+d.length,0),0);
+    const sortedMonths = Object.keys(months).sort((a,b)=>b-a);
+    const inner = sortedMonths.map(m=>monthSection(m,months[m],yearStr)).join("");
+    return `<details open>
+      <summary class="flex items-center gap-2 px-4 py-2.5 cursor-pointer select-none">
+        <span class="chevron text-slate-500 font-bold text-lg">›</span>
+        <span class="font-bold text-slate-800">${yearStr}</span>
+        <span class="ml-auto text-xs text-muted">${total} request${total!==1?"s":""}</span>
+      </summary>
+      <div class="px-2 space-y-2 pb-2">${inner}</div>
+    </details>`;}
+
+  function deptSection(dept, years, deptTotal){
+    const sortedYears = Object.keys(years).sort((a,b)=>b-a);
+    const inner = sortedYears.map(y=>yearSection(y,years[y])).join("");
+    return `<div id="dept-${dept.replace(/\s+/g,"-")}" class="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
+      <details open>
+        <summary class="flex items-center gap-3 px-5 py-4 cursor-pointer select-none bg-teal/5 border-b border-teal/10">
+          <span class="chevron text-tealdark font-bold text-xl">›</span>
+          <div>
+            <p class="font-bold text-tealdark">${dept}</p>
+            <p class="text-xs text-muted">${deptTotal} archived record${deptTotal!==1?"s":""}</p>
+          </div>
+        </summary>
+        <div class="divide-y divide-slate-50">${inner}</div>
+      </details>
+    </div>`;}
+
+  function render(rows){
+    const tree = buildTree(rows);
+    const treeEl = document.getElementById("tree");
+    treeEl.innerHTML = "";
+    const depts = Object.keys(tree).sort();
+    if(!depts.length){ document.getElementById("empty").classList.remove("hidden"); return; }
+
+    // Populate jump menu
+    const jump = document.getElementById("dept-jump");
+    jump.length = 1;
+    depts.forEach(d=>{
+      const o=document.createElement("option");o.value=d;o.textContent=d;jump.appendChild(o);});
+
+    depts.forEach(dept=>{
+      const years = tree[dept];
+      const total = Object.values(years).reduce((s,m)=>s+Object.values(m).reduce((ss,d)=>ss+d.length,0),0);
+      const div = document.createElement("div");
+      div.innerHTML = deptSection(dept, years, total);
+      treeEl.appendChild(div.firstElementChild);
+    });
+  }
+
+  function updateStats(rows){
+    document.getElementById("stat-total").textContent = rows.length;
+    document.getElementById("stat-completed").textContent = rows.filter(g=>g.status==="completed").length;
+    document.getElementById("stat-denied").textContent = rows.filter(g=>g.status==="denied").length;
+    document.getElementById("stat-depts").textContent = new Set(rows.map(g=>g.department)).size;
+  }
+
+  function applySearch(q){
+    const ql = q.toLowerCase();
+    const filtered = q ? allRows.filter(g=>
+      g.name.toLowerCase().includes(ql) ||
+      g.employee_id.toLowerCase().includes(ql) ||
+      g.department.toLowerCase().includes(ql) ||
+      (g.purpose||"").toLowerCase().includes(ql)
+    ) : allRows;
+    render(filtered);
+    updateStats(filtered);
+    document.getElementById("empty").classList.toggle("hidden", filtered.length > 0);
+  }
+
+  // ---- Load ---- //
+  async function load(){
+    const r = await fetch("/api/gatepasses/archive-all");
+    if(!r.ok){ location.href="/login"; return; }
+    allRows = await r.json();
+    document.getElementById("loading").classList.add("hidden");
+    updateStats(allRows);
+    if(!allRows.length){ document.getElementById("empty").classList.remove("hidden"); return; }
+    render(allRows);
+  }
+
+  // ---- Filters ---- //
+  let searchTimer;
+  document.getElementById("search").addEventListener("input", e=>{
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(()=>applySearch(e.target.value.trim()), 220);
+  });
+
+  document.getElementById("dept-jump").addEventListener("change", e=>{
+    const dept = e.target.value;
+    if(!dept) return;
+    const el = document.getElementById("dept-"+dept.replace(/\s+/g,"-"));
+    if(el) el.scrollIntoView({behavior:"smooth", block:"start"});
+    e.target.value = "";
+  });
+
+  load();
+</script>
+</body>
+</html>

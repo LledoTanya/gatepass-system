@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Guard · Gatepass Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{teal:"#2b8a99",tealdark:"#1f6f7a",tealhover:"#247380",muted:"#6b7785",
+    pendbg:"#f0dcb4",pendtx:"#8a6a35",okbg:"#cdeedd",oktx:"#1c7a48",nobg:"#f6d6d2",notx:"#b23b30"}}}};</script>
+  <style>
+    @media print{.no-print{display:none!important}.print-only{display:block!important}}
+    .print-only{display:none}
+  </style>
+</head>
+<body class="h-full bg-[#e9ecef] text-slate-800 antialiased">
+<header class="bg-white shadow-sm no-print relative z-40">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
+      <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
+      <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-teal/10 text-teal">Guard</span>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <!-- Notification bell -->
+      <div class="relative">
+        <button id="bell-btn" class="relative p-2 text-slate-500 hover:text-teal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="bell-badge" class="hidden absolute -top-1 -right-1 text-[10px] min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-red-500 text-white font-bold">0</span>
+        </button>
+        <div id="notif-panel" class="hidden absolute right-0 top-full mt-2 w-80 max-h-96 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <span class="font-semibold text-sm">Notifications</span>
+          </div>
+          <div id="notif-list" class="overflow-y-auto max-h-72 divide-y divide-slate-100"></div>
+          <div id="notif-empty" class="text-center text-muted text-xs py-8">No notifications.</div>
+        </div>
+      </div>
+      <div class="font-mono text-slate-500 tabular-nums text-sm" id="clock">--/--/---- --:--:--</div>
+      <nav class="flex items-center gap-1 text-sm border-l border-slate-200 pl-3">
+        <span class="font-medium text-slate-800">Active</span>
+        <span class="text-slate-300 mx-1">|</span>
+        <a href="/guard/archive" class="text-muted hover:text-slate-700">Archive</a>
+      </nav>
+      <span class="text-sm text-slate-500 border-l border-slate-200 pl-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">Guard</span></span>
+      <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-7 grid lg:grid-cols-5 gap-7">
+  <!-- QR Panel (printable) -->
+  <section class="lg:col-span-2">
+    <div class="bg-white rounded-2xl p-6 shadow-sm" id="qr-panel">
+      <h2 class="text-lg font-bold text-tealdark no-print">QR Code</h2>
+      <p class="text-xs text-muted mb-5 no-print">Fixed QR - Staff scan to request gatepass</p>
+      <!-- Print-only header -->
+      <div class="print-only text-center mb-4">
+        <img src="/static/logo.png" alt="CPFI" class="h-16 w-16 object-contain mx-auto mb-2"/>
+        <p class="font-bold text-lg">Century Pacific Food, Inc.</p>
+        <p class="text-sm text-muted">Scan to request a gatepass</p>
+      </div>
+      <div class="rounded-2xl bg-slate-50 border border-slate-100 p-4 grid place-items-center">
+        <img id="qr" alt="QR" class="w-56 h-56 object-contain"/>
+      </div>
+      <div class="mt-4 flex items-center justify-between no-print">
+        <span class="text-xs text-muted">Token <span id="token" class="font-mono text-tealdark text-xs">--------</span></span>
+        <button onclick="window.print()" class="text-sm font-medium text-teal hover:text-tealhover flex items-center gap-1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Print QR
+        </button>
+      </div>
+      <p class="mt-2 text-[11px] text-muted break-all no-print" id="scanurl"></p>
+    </div>
+  </section>
+
+  <!-- Live request feed -->
+  <section class="lg:col-span-3 no-print">
+    <!-- Row 1: title + live dot (never moves) -->
+    <div class="flex items-center gap-2 mb-1">
+      <h2 class="text-lg font-bold" id="feed-title">Active Requests</h2>
+    </div>
+    <p class="text-xs text-muted mb-3">View only</p>
+
+    <!-- Row 2: controls — always pinned here, never shift -->
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
+      <div class="flex rounded-lg border border-slate-300 overflow-hidden text-xs shrink-0">
+        <button id="tab-active" onclick="switchTab('active')" class="px-3 py-1.5 font-semibold bg-teal text-white">Active</button>
+        <button id="tab-history" onclick="switchTab('history')" class="px-3 py-1.5 font-medium text-slate-600 bg-white">History</button>
+      </div>
+      <select id="dept-filter" class="bg-white border border-slate-300 rounded-lg text-xs px-2 py-1.5 focus:border-teal focus:outline-none shrink-0">
+        <option value="">All Depts</option>
+      </select>
+      <select id="status-filter" class="bg-white border border-slate-300 rounded-lg text-xs px-2 py-1.5 focus:border-teal focus:outline-none shrink-0">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="pending_nurse">Pending Nurse</option>
+        <option value="approved">Approved</option>
+        <option value="denied">Denied</option>
+      </select>
+      <span id="pcount" class="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 shrink-0">0</span>
+    </div>
+    <div id="list" class="space-y-3"></div>
+    <div id="empty" class="text-center py-16 bg-white rounded-2xl shadow-sm">
+      <p class="text-sm text-muted">No requests match current filters.</p>
+      <p class="text-xs text-slate-400 mt-1">New scans appear automatically.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+  // ---- Clock ---- //
+  function tick(){const n=new Date(),p=x=>String(x).padStart(2,"0");
+    document.getElementById("clock").textContent=`${p(n.getMonth()+1)}/${p(n.getDate())}/${n.getFullYear()} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;}
+  setInterval(tick,1000);tick();
+
+  // ---- QR (static) ---- //
+  async function loadQR(){const r=await fetch("/api/qr");if(!r.ok){location.href="/login";return;}
+    const d=await r.json();
+    document.getElementById("qr").src=d.qr;
+    document.getElementById("token").textContent=d.token;
+    document.getElementById("scanurl").textContent=d.scan_url;}
+  loadQR();
+
+  // ---- Helpers ---- //
+  function purposeText(g){if(g.purpose==="Sickness / Illness")return`Sickness${g.recommendation?" — "+g.recommendation:""}`;return g.purpose;}
+  function styleFor(s){return({
+    pending:{pill:"bg-pendbg text-pendtx",label:"Pending"},
+    pending_nurse:{pill:"bg-purple-100 text-purple-700",label:"Pending Nurse"},
+    approved:{pill:"bg-okbg text-oktx",label:"Approved — may exit"},
+    denied:{pill:"bg-nobg text-notx",label:"Denied"},
+    completed:{pill:"bg-slate-200 text-slate-600",label:"Returned"},
+    cancelled:{pill:"bg-slate-200 text-slate-500",label:"Cancelled"},
+  })[s]||{pill:"bg-slate-200 text-slate-600",label:s};}
+
+  // ---- Cards ---- //
+  const list=document.getElementById("list"),empty=document.getElementById("empty");
+  let allRequests=[];
+  let currentTab="active";
+
+  function switchTab(tab){
+    currentTab=tab;
+    document.getElementById("tab-active").className=tab==="active"
+      ?"px-3 py-1.5 font-semibold bg-teal text-white":"px-3 py-1.5 font-medium text-slate-600 bg-white";
+    document.getElementById("tab-history").className=tab==="history"
+      ?"px-3 py-1.5 font-semibold bg-teal text-white":"px-3 py-1.5 font-medium text-slate-600 bg-white";
+    document.getElementById("feed-title").textContent=tab==="active"?"Active Requests":"Request History";
+    // status filter only makes sense for active
+    document.getElementById("status-filter").style.display=tab==="active"?"":"none";
+    if(tab==="history")loadHistory(); else loadRequests();
+  }
+
+  function cardInner(g){const s=styleFor(g.status);
+    const isApproved=g.status==="approved";
+    const noReturn=g.purpose==="Undertime"||g.purpose==="Sickness / Illness";
+    // Out is available for any approved request not yet marked out
+    const canOut=isApproved&&!g.left_at;
+    // Return only for normal purposes that have already gone out
+    const canReturn=isApproved&&g.left_at&&!noReturn;
+    return`<div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="font-bold text-tealdark truncate">${g.name}</p>
+          <p class="text-xs text-muted">${g.department} · ${g.employee_id}</p>
+        </div>
+        <span class="status shrink-0 text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full ${s.pill}">${s.label}</span>
+      </div>
+      <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <div><span class="text-muted text-[11px]">Purpose</span><span class="font-medium block">${purposeText(g)}</span></div>
+        ${(g.decided_by_name||g.accepted_by_dept)?`<div><span class="text-muted text-[11px]">Decided By</span><span class="font-medium block text-tealdark">${g.decided_by_name||g.accepted_by_dept}</span></div>`:""}
+        ${g.left_at?`<div><span class="text-muted text-[11px]">Time Out</span><span class="font-mono text-green-700 block"> ${g.left_at.slice(11,16)}</span></div>`:""}
+        ${g.returned_at?`<div><span class="text-muted text-[11px]">Time In</span><span class="font-mono text-blue-700 block"> ${g.returned_at.slice(11,16)}</span></div>`:""}
+      </div>
+      <div class="mt-3 flex items-center justify-end gap-2">
+        <a href="/api/gatepass/${g.id}/pdf" target="_blank" class="text-xs font-semibold text-teal border border-teal/40 hover:bg-teal/5 rounded-lg px-3 py-1.5">Slip</a>
+        ${canOut?`<button data-out="${g.id}" class="text-xs font-semibold text-white bg-teal hover:bg-tealhover rounded-lg px-3 py-1.5">Out</button>`:""}
+        ${canReturn?`<button data-return="${g.id}" class="text-xs font-semibold text-white bg-teal hover:bg-tealhover rounded-lg px-3 py-1.5">Return</button>`:""}
+      </div>`;}
+
+  function card(g){const el=document.createElement("div");el.id="gp-"+g.id;el.className="bg-white rounded-2xl p-4 shadow-sm";el.innerHTML=cardInner(g);return el;}
+
+  // History card — read-only, shows out/return times and final status
+  function historyCardInner(g){const s=styleFor(g.status);
+    return`<div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="font-bold text-tealdark truncate">${g.name}</p>
+          <p class="text-xs text-muted">${g.department} · ${g.employee_id}</p>
+        </div>
+        <span class="shrink-0 text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full ${s.pill}">${s.label}</span>
+      </div>
+      <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
+        <div><span class="text-muted text-[11px]">Purpose</span><span class="font-medium block">${purposeText(g)}</span></div>
+        <div><span class="text-muted text-[11px]">Time Out</span><span class="font-mono block ${g.left_at?"text-green-700":"text-slate-400"}">${g.left_at?g.left_at.slice(11,16):"—"}</span></div>
+        <div><span class="text-muted text-[11px]">Time In</span><span class="font-mono block ${g.returned_at?"text-blue-700":"text-slate-400"}">${g.returned_at?g.returned_at.slice(11,16):"—"}</span></div>
+      </div>
+      ${(g.decided_by_name||g.accepted_by_dept)?`<div class="mt-2 text-xs"><span class="text-muted">Decided by: </span><span class="font-medium text-tealdark">${g.decided_by_name||g.accepted_by_dept}</span></div>`:""}
+      <div class="mt-2 flex items-center justify-between">
+        <span class="text-[11px] text-muted">${g.created_at||""}</span>
+        <a href="/api/gatepass/${g.id}/pdf" target="_blank" class="text-xs font-semibold text-teal border border-teal/40 hover:bg-teal/5 rounded-lg px-3 py-1.5">Slip</a>
+      </div>`;}
+  function historyCard(g){const el=document.createElement("div");el.className="bg-white rounded-2xl p-4 shadow-sm";el.innerHTML=historyCardInner(g);return el;}
+
+  function renderList(){
+    const df=document.getElementById("dept-filter").value;
+    const sf=document.getElementById("status-filter").value;
+    const filtered=allRequests.filter(g=>{
+      if(g.status==="completed")return false;
+      if(df&&g.department!==df)return false;
+      if(sf&&g.status!==sf)return false;
+      return true;});
+    list.innerHTML="";
+    filtered.forEach(g=>{list.appendChild(card(g));});
+    empty.classList.toggle("hidden",filtered.length>0);
+    document.getElementById("pcount").textContent=filtered.length;
+  }
+
+  async function loadHistory(){
+    const r=await fetch("/api/gatepasses?scope=history");
+    if(!r.ok)return;
+    let rows=await r.json();
+    const df=document.getElementById("dept-filter").value;
+    if(df)rows=rows.filter(g=>g.department===df);
+    list.innerHTML="";
+    rows.forEach(g=>{list.appendChild(historyCard(g));});
+    empty.classList.toggle("hidden",rows.length>0);
+    document.getElementById("pcount").textContent=rows.length;
+  }
+
+  function upsertRequest(g){
+    if(currentTab!=="active")return;  // don't touch DOM while viewing history
+    const idx=allRequests.findIndex(x=>x.id===g.id);
+    if(idx>=0)allRequests[idx]=g; else allRequests.unshift(g);
+    renderList();}
+
+  // Guard actions: Out & Return
+  list.addEventListener("click",async e=>{
+    const ob=e.target.closest("[data-out]"),rb=e.target.closest("[data-return]");
+    if(ob){ob.disabled=true;ob.textContent="…";
+      const r=await fetch(`/api/gatepass/${ob.dataset.out}/out`,{method:"POST"});
+      if(r.ok){const g=await r.json();upsertRequest(g);}else{ob.disabled=false;ob.textContent="Out";}}
+    if(rb){rb.disabled=true;rb.textContent="…";
+      const r=await fetch(`/api/gatepass/${rb.dataset.return}/return`,{method:"POST"});
+      if(r.ok){const g=await r.json();upsertRequest(g);}else{rb.disabled=false;rb.textContent="Return";}}
+  });
+
+  async function loadRequests(){
+    const r=await fetch("/api/gatepasses?scope=active");
+    if(!r.ok){location.href="/login";return;}
+    // Replace array and re-render once on initial load only
+    allRequests=await r.json();renderList();}
+
+  // Silent background sync — merges new data without clearing the DOM (no flicker)
+  async function silentSync(){
+    if(currentTab!=="active")return;  // history is static, don't sync
+    try{
+      const r=await fetch("/api/gatepasses?scope=active");
+      if(!r.ok)return;
+      const fresh=await r.json();
+      const freshIds=new Set(fresh.map(g=>g.id));
+      // Update or add changed/new requests
+      fresh.forEach(g=>upsertRequest(g));
+      // Remove cards for requests that are no longer active
+      allRequests=allRequests.filter(g=>{
+        if(!freshIds.has(g.id)){const el=document.getElementById("gp-"+g.id);if(el)el.remove();return false;}
+        return true;});
+      const df=document.getElementById("dept-filter").value;
+      const sf=document.getElementById("status-filter").value;
+      const visible=allRequests.filter(g=>{
+        if(g.status==="completed")return false;
+        if(df&&g.department!==df)return false;
+        if(sf&&g.status!==sf)return false;return true;});
+      empty.classList.toggle("hidden",visible.length>0);
+      document.getElementById("pcount").textContent=visible.length;
+    }catch(_){}
+  }
+
+  // Populate dept filter
+  async function loadDepts(){const r=await fetch("/api/departments");const ds=await r.json();
+    const sel=document.getElementById("dept-filter");
+    ds.forEach(d=>{const o=document.createElement("option");o.value=d;o.textContent=d;sel.appendChild(o);});}
+
+  document.getElementById("dept-filter").addEventListener("change",()=>{currentTab==="active"?renderList():loadHistory();});
+  document.getElementById("status-filter").addEventListener("change",renderList);
+
+  // ---- Notifications ---- //
+  let notifs=[];
+  document.getElementById("bell-btn").addEventListener("click", async () => {
+    const panel = document.getElementById("notif-panel");
+    const isOpening = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden");
+    if (isOpening) {
+      // Mark all as read when the panel is opened
+      const unread = notifs.filter(n => !n.is_read);
+      if (unread.length) {
+        await fetch("/api/notifications/read-all", { method: "POST" });
+        notifs.forEach(n => n.is_read = true);
+        renderN();
+      }
+    }
+  });
+  document.addEventListener("click",e=>{if(!e.target.closest("#bell-btn")&&!e.target.closest("#notif-panel"))document.getElementById("notif-panel").classList.add("hidden");});
+  
+  function renderN(){const nl=document.getElementById("notif-list"),ne=document.getElementById("notif-empty"),bb=document.getElementById("bell-badge");
+    nl.innerHTML="";const u=notifs.filter(n=>!n.is_read).length;bb.textContent=u;bb.classList.toggle("hidden",u===0);
+    if(!notifs.length){ne.classList.remove("hidden");return;}ne.classList.add("hidden");
+    notifs.slice(0,50).forEach(n=>{const d=document.createElement("div");
+      d.className=`px-4 py-3 text-sm cursor-pointer hover:bg-slate-50 ${n.is_read?"text-muted":"text-slate-800 bg-teal/5"}`;
+      d.innerHTML=`<p>${n.message}</p><p class="text-xs text-muted mt-0.5">${n.created_at}</p>`;
+      d.addEventListener("click",async()=>{if(!n.is_read){await fetch(`/api/notifications/${n.id}/read`,{method:"POST"});n.is_read=true;renderN();}});
+      nl.appendChild(d);});}
+  async function loadNotifs(){const r=await fetch("/api/notifications?target=guard");if(r.ok){notifs=await r.json();renderN();}}
+
+  // SSE for instant updates; silent sync every 5s catches anything SSE misses (no DOM wipe)
+  const es=new EventSource("/api/events");
+  es.addEventListener("new_request",e=>{upsertRequest(JSON.parse(e.data));});
+  es.addEventListener("status_update",e=>{upsertRequest(JSON.parse(e.data));});
+  es.addEventListener("notification",e=>{const n=JSON.parse(e.data);if(!n.target_role||n.target_role==="guard"){notifs.unshift(n);renderN();}});
+  setInterval(silentSync,5000);
+
+  loadQR();loadDepts();loadRequests();loadNotifs();
+</script>
+</body>
+</html>

@@ -117,18 +117,34 @@
 <!-- Leave confirmation modal -->
 <div id="leave-modal" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center px-4">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
-    <h3 class="text-base font-semibold">Set yourself as on leave?</h3>
-    <p class="text-sm text-slate-600">Your name will be hidden from approver dropdowns until your return date. You will not be able to clear this manually — it will reset automatically at 6:00 AM on the selected date.</p>
-    <div>
-      <label class="block text-xs font-medium text-slate-500 mb-1">Return date</label>
-      <input type="date" id="leave-return-date"
-        class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
-      <p id="leave-date-error" class="hidden mt-1 text-xs text-red-600">Please select a return date.</p>
+
+    <!-- Step 1: date picker -->
+    <div id="leave-step-1">
+      <h3 class="text-base font-semibold mb-3">Set yourself as on leave</h3>
+      <p class="text-sm text-slate-600 mb-3">Select the date you will be available again. Your leave status will clear automatically at 6:00 AM on that date.</p>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Return date</label>
+        <input type="date" id="leave-return-date"
+          class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+        <p id="leave-date-error" class="hidden mt-1 text-xs text-red-600">Please select a return date.</p>
+      </div>
+      <div class="flex gap-3 pt-4">
+        <button id="leave-modal-cancel" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
+        <button id="leave-step-next" class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Next</button>
+      </div>
     </div>
-    <div class="flex gap-3 pt-1">
-      <button id="leave-modal-cancel" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
-      <button id="leave-modal-ok" class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Confirm</button>
+
+    <!-- Step 2: warning before final confirm -->
+    <div id="leave-step-2" class="hidden">
+      <h3 class="text-base font-semibold mb-3">Are you sure?</h3>
+      <p class="text-sm text-slate-600 mb-2">You are about to set yourself as <span class="font-semibold">on leave until <span id="leave-confirm-date"></span></span>.</p>
+      <p class="text-sm text-slate-600">Once confirmed, your name will be hidden from all approver dropdowns. <span class="font-medium text-slate-700">You will not be able to undo this yourself</span> - it will only clear automatically at 6:00 AM on your return date.</p>
+      <div class="flex gap-3 pt-4">
+        <button id="leave-step-back" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Go back</button>
+        <button id="leave-modal-ok" class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Confirm</button>
+      </div>
     </div>
+
   </div>
 </div>
 
@@ -330,11 +346,16 @@
     }
     applyLeaveStyle();
 
+    function showLeaveStep(n){
+      document.getElementById("leave-step-1").classList.toggle("hidden", n!==1);
+      document.getElementById("leave-step-2").classList.toggle("hidden", n!==2);
+    }
+
     btn.addEventListener("click", ()=>{
-      if(IS_ON_LEAVE) return; // disabled — scheduler only clears this
-      // Reset and show the date picker modal
+      if(IS_ON_LEAVE) return;
       document.getElementById("leave-return-date").value = todayStr;
       document.getElementById("leave-date-error").classList.add("hidden");
+      showLeaveStep(1);
       document.getElementById("leave-modal").classList.remove("hidden");
     });
 
@@ -342,13 +363,24 @@
       document.getElementById("leave-modal").classList.add("hidden");
     });
 
-    document.getElementById("leave-modal-ok").addEventListener("click", async()=>{
+    document.getElementById("leave-step-next").addEventListener("click", ()=>{
       const returnDate = document.getElementById("leave-return-date").value;
       const errEl = document.getElementById("leave-date-error");
-      if(!returnDate){
-        errEl.classList.remove("hidden"); return;
-      }
+      if(!returnDate){ errEl.classList.remove("hidden"); return; }
       errEl.classList.add("hidden");
+      // Format the date for the warning (e.g. "June 30, 2026")
+      const d = new Date(returnDate + "T00:00:00");
+      document.getElementById("leave-confirm-date").textContent =
+        d.toLocaleDateString(undefined, {year:"numeric", month:"long", day:"numeric"});
+      showLeaveStep(2);
+    });
+
+    document.getElementById("leave-step-back").addEventListener("click", ()=>{
+      showLeaveStep(1);
+    });
+
+    document.getElementById("leave-modal-ok").addEventListener("click", async()=>{
+      const returnDate = document.getElementById("leave-return-date").value;
       document.getElementById("leave-modal").classList.add("hidden");
       btn.disabled=true;
       const r=await fetch("/api/me/on-leave",{

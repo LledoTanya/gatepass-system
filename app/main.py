@@ -27,16 +27,31 @@ async def _bg_cleanup():
         await asyncio.sleep(3600)
         try:
             db = SessionLocal()
-            cutoff = dt.datetime.now() - dt.timedelta(hours=24)
+            now = dt.datetime.now()
+            cutoff = now - dt.timedelta(hours=24)
+
+            # Archive old resolved gatepasses
             for gp in db.query(Gatepass).filter(
                 Gatepass.is_archived == False,
                 Gatepass.status.in_([GatepassStatus.APPROVED, GatepassStatus.DENIED,
                                      GatepassStatus.COMPLETED, GatepassStatus.CANCELLED]),
                 Gatepass.decided_at < cutoff,
             ).all():
-                gp.is_archived = True; gp.archived_at = dt.datetime.now()
+                gp.is_archived = True; gp.archived_at = now
             db.query(Notification).filter(Notification.created_at < cutoff).delete()
             db.query(AuditLog).filter(AuditLog.created_at < cutoff).delete()
+
+            # Auto-clear on-leave for users whose return date has passed (after 6:00 AM)
+            if now.hour >= 6:
+                today_6am = now.replace(hour=6, minute=0, second=0, microsecond=0)
+                for user in db.query(User).filter(
+                    User.is_on_leave == True,
+                    User.leave_until != None,
+                    User.leave_until <= today_6am,
+                ).all():
+                    user.is_on_leave = False
+                    user.leave_until = None
+
             db.commit()
         except Exception: pass
         finally:
@@ -146,6 +161,7 @@ def dept_page(request: Request):
         "dept_name": info.get("department", ""),
         "is_oic": info["role"] == "dept_oic",
         "is_on_leave": info.get("is_on_leave", False),
+        "leave_until": info.get("leave_until", None),
         "user_id": info.get("user_id"),
     })
 
@@ -264,18 +280,50 @@ def reset_pw_submit(token: str = Form(...), password: str = Form(...), db=Depend
 
 # ---- API: On-leave toggle ---- #
 @app.post("/api/me/on-leave")
-def api_toggle_on_leave(request: Request, db=Depends(get_db),
+async def api_toggle_on_leave(request: Request, db=Depends(get_db),
                         role=Depends(auth.require_role(*DEPT_ROLES))):
-    """Head or OIC toggles their own on-leave status."""
+    """
+    Head or OIC sets themselves on leave with a return date.
+    Expects JSON body: { "return_date": "YYYY-MM-DD" } when going ON leave.
+    Once on leave, this endpoint cannot clear it manually — the scheduler does that.
+    """
     info = auth.session_info(request)
     user = db.get(User, info["user_id"])
     if not user: raise HTTPException(404)
-    user.is_on_leave = not user.is_on_leave
+
+    # If already on leave, block manual toggle-off — only the scheduler clears it
+    if user.is_on_leave:
+        raise HTTPException(400, "Your leave is active until your return date. It will clear automatically.")
+
+    # Parse the return date from the request body
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    return_date_str = body.get("return_date", "")
+    if not return_date_str:
+        raise HTTPException(400, "Please select a return date.")
+
+    try:
+        return_date = dt.datetime.strptime(return_date_str, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, "Invalid date format.")
+
+    today = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    if return_date < today:
+        raise HTTPException(400, "Return date must be today or in the future.")
+
+    # Set on leave — return date is when the 6 AM scheduler will clear it
+    leave_until = return_date.replace(hour=6, minute=0, second=0, microsecond=0)
+    user.is_on_leave = True
+    user.leave_until = leave_until
     db.commit()
-    # Keep session in sync so the page header reflects the new state immediately
+
     sid = request.cookies.get(auth.COOKIE_NAME)
-    auth.update_session_leave(sid, user.is_on_leave)
-    return {"is_on_leave": user.is_on_leave}
+    auth.update_session_leave(sid, True, return_date_str)
+    return {"is_on_leave": True, "leave_until": return_date_str}
 
 # ---- API: QR ---- #
 @app.get("/api/qr")

@@ -39,7 +39,7 @@
         <a href="/dept/archive" class="text-muted hover:text-slate-700">Archive</a>
       </nav>
       <button id="leave-btn" class="text-sm font-medium border rounded-lg px-3 py-1.5 transition" data-on="{{ is_on_leave | lower }}">
-        <span id="leave-label">{% if is_on_leave %}On Leave{% else %}Set On Leave{% endif %}</span>
+        <span id="leave-label">{% if is_on_leave %}On Leave{% if leave_until %} · back {{ leave_until }}{% endif %}{% else %}Set On Leave{% endif %}</span>
       </button>
       <span class="text-sm text-slate-500 border-l border-slate-200 pl-3">{{ username }}<span class="text-slate-400 ml-1 text-xs">{{ "Head" if role == "dept_head" else "OIC" }}</span></span>
       <a href="/logout" class="font-medium border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5">Log Out</a>
@@ -117,8 +117,14 @@
 <!-- Leave confirmation modal -->
 <div id="leave-modal" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center px-4">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
-    <h3 id="leave-modal-title" class="text-base font-semibold"></h3>
-    <p id="leave-modal-body" class="text-sm text-slate-600"></p>
+    <h3 class="text-base font-semibold">Set yourself as on leave?</h3>
+    <p class="text-sm text-slate-600">Your name will be hidden from approver dropdowns until your return date. You will not be able to clear this manually — it will reset automatically at 6:00 AM on the selected date.</p>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Return date</label>
+      <input type="date" id="leave-return-date"
+        class="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:border-teal focus:outline-none"/>
+      <p id="leave-date-error" class="hidden mt-1 text-xs text-red-600">Please select a return date.</p>
+    </div>
     <div class="flex gap-3 pt-1">
       <button id="leave-modal-cancel" class="flex-1 border border-slate-300 rounded-xl py-2.5 text-sm font-medium">Cancel</button>
       <button id="leave-modal-ok" class="flex-1 bg-teal hover:bg-tealhover text-white rounded-xl py-2.5 text-sm font-semibold">Confirm</button>
@@ -303,38 +309,63 @@
   (function(){
     const btn = document.getElementById("leave-btn");
     if(!btn) return;
+
+    // Set today as the minimum selectable date
+    const todayStr = new Date().toISOString().split("T")[0];
+    document.getElementById("leave-return-date").min = todayStr;
+    document.getElementById("leave-return-date").value = todayStr;
+
     function applyLeaveStyle(){
       if(IS_ON_LEAVE){
-        btn.className="text-sm font-medium border border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition";
+        btn.className="text-sm font-medium border border-amber-400 bg-amber-50 text-amber-700 rounded-lg px-3 py-1.5 cursor-not-allowed";
         document.getElementById("leave-label").textContent="On Leave";
+        btn.disabled = true;
+        btn.title = "Your leave is active until your return date. It will clear automatically.";
       } else {
         btn.className="text-sm font-medium border border-slate-300 text-slate-600 hover:border-slate-400 rounded-lg px-3 py-1.5 transition";
         document.getElementById("leave-label").textContent="Set On Leave";
+        btn.disabled = false;
+        btn.title = "";
       }
     }
     applyLeaveStyle();
+
     btn.addEventListener("click", ()=>{
-      // Show confirmation before toggling
-      const willBeOnLeave = !IS_ON_LEAVE;
-      document.getElementById("leave-modal-title").textContent = willBeOnLeave ? "Set yourself as on leave?" : "Clear on leave status?";
-      document.getElementById("leave-modal-body").textContent = willBeOnLeave
-        ? "Your name will be hidden from approver dropdowns. Staff will not be able to assign requests to you until you clear this."
-        : "Your name will become available again in approver dropdowns.";
+      if(IS_ON_LEAVE) return; // disabled — scheduler only clears this
+      // Reset and show the date picker modal
+      document.getElementById("leave-return-date").value = todayStr;
+      document.getElementById("leave-date-error").classList.add("hidden");
       document.getElementById("leave-modal").classList.remove("hidden");
     });
+
     document.getElementById("leave-modal-cancel").addEventListener("click", ()=>{
       document.getElementById("leave-modal").classList.add("hidden");
     });
+
     document.getElementById("leave-modal-ok").addEventListener("click", async()=>{
+      const returnDate = document.getElementById("leave-return-date").value;
+      const errEl = document.getElementById("leave-date-error");
+      if(!returnDate){
+        errEl.classList.remove("hidden"); return;
+      }
+      errEl.classList.add("hidden");
       document.getElementById("leave-modal").classList.add("hidden");
       btn.disabled=true;
-      const r=await fetch("/api/me/on-leave",{method:"POST"});
+      const r=await fetch("/api/me/on-leave",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({return_date: returnDate})
+      });
       btn.disabled=false;
-      if(!r.ok){toast("<p class=\"text-sm text-red-600\">Failed to update leave status.</p>","border-red-500");return;}
+      if(!r.ok){
+        const j=await r.json().catch(()=>({}));
+        toast(`<p class="text-sm text-red-600">${j.detail||"Failed to update leave status."}</p>`,"border-red-500");
+        return;
+      }
       const d=await r.json();
       IS_ON_LEAVE=d.is_on_leave;
       applyLeaveStyle();
-      toast(`<p class="text-sm font-medium">${IS_ON_LEAVE?"You are now marked as on leave. Your name is hidden from approver lists.":"Leave status cleared. You are now available as an approver."}</p>`);
+      toast(`<p class="text-sm font-medium">You are now marked as on leave until ${d.leave_until}. Your name is hidden from approver lists.</p>`);
     });
   })();
 </script>

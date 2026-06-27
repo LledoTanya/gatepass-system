@@ -30,14 +30,16 @@ def authenticate(db: Session, username: str, password: str):
         "user_id": user.id,
         "department": user.department or "",
         "is_on_leave": user.is_on_leave,
+        "leave_until": user.leave_until.strftime("%Y-%m-%d") if user.leave_until else None,
     }
     _sessions[sid] = info
     return sid, info
 
-def update_session_leave(sid: str, is_on_leave: bool):
-    """Update the on-leave flag in an active session after the user toggles it."""
+def update_session_leave(sid: str, is_on_leave: bool, leave_until_str: str | None = None):
+    """Update the on-leave flag and return date in an active session."""
     if sid and sid in _sessions:
         _sessions[sid]["is_on_leave"] = is_on_leave
+        _sessions[sid]["leave_until"] = leave_until_str
 
 def logout(cookies: dict):
     sid = cookies.get(COOKIE_NAME)

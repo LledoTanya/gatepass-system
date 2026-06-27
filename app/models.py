@@ -42,6 +42,7 @@ class User(Base):
     department    = Column(String(100), nullable=True)
     is_active     = Column(Boolean, default=True, nullable=False)
     is_on_leave   = Column(Boolean, default=False, nullable=False)
+    leave_until   = Column(DateTime, nullable=True)  # auto-clear at 6 AM on this date
     created_at    = Column(DateTime, default=dt.datetime.now)
     updated_at    = Column(DateTime, default=dt.datetime.now, onupdate=dt.datetime.now)
 
@@ -51,6 +52,7 @@ class User(Base):
             "role": self.role.value, "department": self.department,
             "is_active": self.is_active,
             "is_on_leave": self.is_on_leave,
+            "leave_until": self.leave_until.strftime("%Y-%m-%d") if self.leave_until else None,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
         }
 

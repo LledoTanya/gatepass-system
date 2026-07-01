@@ -1,7 +1,5 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full"><head>
-  <link rel="icon" type="image/png" href="/static/logo1.png">
-
   <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Reports · {{ dept_name }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,7 +9,7 @@
 <header class="bg-white shadow-sm"><div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
   <div class="flex items-center gap-2.5">
     <img src="/static/logo.png" alt="CPFI" class="h-8 w-8 object-contain"/>
-    <span class="font-bold text-tealdark text-lg">GateFlow</span>
+    <span class="font-bold text-tealdark text-lg">Gatepass Control</span>
     <span class="text-[11px] uppercase tracking-wide px-2.5 py-1 rounded-full bg-teal/10 text-teal">{{ dept_name }}</span>
   </div>
   <div class="flex items-center gap-3 text-sm">
@@ -30,7 +28,10 @@
 <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
   <div class="flex items-center justify-between">
     <h1 class="text-2xl font-bold">Monthly Reports</h1>
-    <input type="month" id="month-picker" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:border-teal focus:outline-none"/>
+    <div class="flex items-center gap-2">
+      <input type="month" id="month-picker" class="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:border-teal focus:outline-none"/>
+      <a id="download-btn" href="/api/gatepasses/report/pdf" target="_blank" rel="noopener" class="border border-slate-300 hover:border-teal rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 transition">Download PDF</a>
+    </div>
   </div>
 
   <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
@@ -67,6 +68,7 @@
     document.getElementById("report-loading").classList.add("hidden");
     if(!data.length){document.getElementById("report-empty").classList.remove("hidden");return;}
     const months=allMonths(data);
+
     const hdr=document.getElementById("report-header");
     hdr.innerHTML=`<th class="text-left font-semibold px-4 py-3">Employee</th>`
       +months.map(mo=>`<th class="text-center font-semibold px-4 py-3">${mo}</th>`).join("")
@@ -86,7 +88,18 @@
     document.getElementById("report-table").classList.remove("hidden");
   }
 
-  document.getElementById("month-picker").addEventListener("change",loadReport);
+  // Keep the PDF link in sync with the selected month
+  function updateDownloadLink() {
+    const m = document.getElementById("month-picker").value;
+    document.getElementById("download-btn").href =
+      `/api/gatepasses/report/pdf${m ? "?month=" + m : ""}`;
+  }
+
+  document.getElementById("month-picker").addEventListener("change", () => {
+    updateDownloadLink();
+    loadReport();
+  });
+  updateDownloadLink();
   loadReport();
 </script>
 </body></html>

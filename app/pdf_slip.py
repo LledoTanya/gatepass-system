@@ -283,3 +283,174 @@ def build_gatepass_pdf(gp: dict) -> bytes:
     c.save()
     buf.seek(0)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Report summary PDF  (dept head / OIC — monthly summary by employee)
+# ---------------------------------------------------------------------------
+def build_report_pdf(dept: str, month: str, data: list) -> bytes:
+    """
+    data: list of { name, employee_id, months: { "YYYY-MM": { total, purposes } } }
+    Renders a printable summary table.
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter,
+                            leftMargin=36, rightMargin=36,
+                            topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Title
+    title_style = styles["Heading2"]
+    elements.append(Paragraph(f"CENTURY PACIFIC FOOD, INC.", styles["Heading1"]))
+    elements.append(Paragraph(f"Gatepass Summary Report — {dept}", styles["Heading2"]))
+    elements.append(Paragraph(f"Period: {month}", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    if not data:
+        elements.append(Paragraph("No records for this period.", styles["Normal"]))
+    else:
+        # Collect all months that appear
+        all_months: set = set()
+        for e in data:
+            all_months.update(e.get("months", {}).keys())
+        all_months_sorted = sorted(all_months)
+
+        # Build header
+        header = ["Employee", "Employee ID"] + all_months_sorted + ["Total"]
+
+        # Build rows
+        rows = [header]
+        for e in data:
+            total = 0
+            cells = []
+            for m in all_months_sorted:
+                cnt = (e.get("months", {}).get(m) or {}).get("total", 0)
+                total += cnt
+                cells.append(str(cnt) if cnt else "—")
+            rows.append([e.get("name", ""), e.get("employee_id", "")] + cells + [str(total)])
+
+        # Column widths: name=130, eid=70, each month=50, total=40
+        col_widths = [130, 70] + [50] * len(all_months_sorted) + [40]
+        # Clamp total width to available page width (letter - margins)
+        max_w = letter[0] - 72
+        total_w = sum(col_widths)
+        if total_w > max_w:
+            scale = max_w / total_w
+            col_widths = [w * scale for w in col_widths]
+
+        t = Table(rows, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2b8a99")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ("FONTNAME", (-1, 1), (-1, -1), "Helvetica-Bold"),  # totals col bold
+            ("ALIGN", (2, 0), (-1, -1), "CENTER"),
+            ("ALIGN", (0, 0), (1, -1), "LEFT"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f1f5f9")]),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        elements.append(t)
+
+    elements.append(Spacer(1, 16))
+    elements.append(Paragraph(
+        f"Generated {dt.datetime.now().strftime('%Y-%m-%d %H:%M')} · Gatepass Control",
+        styles["Italic"]
+    ))
+
+    doc.build(elements)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Archive PDF  (guard — full flat list of archived records)
+# ---------------------------------------------------------------------------
+def build_archive_pdf(rows: list) -> bytes:
+    """
+    rows: list of Gatepass.as_dict()
+    Renders a flat printable table of all archived gatepass records.
+    """
+    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+
+    buf = io.BytesIO()
+    page = landscape(letter)
+    doc = SimpleDocTemplate(buf, pagesize=page,
+                            leftMargin=36, rightMargin=36,
+                            topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("CENTURY PACIFIC FOOD, INC.", styles["Heading1"]))
+    elements.append(Paragraph("Gatepass Archive", styles["Heading2"]))
+    elements.append(Paragraph(
+        f"Generated {dt.datetime.now().strftime('%Y-%m-%d %H:%M')} · {len(rows)} records",
+        styles["Normal"]
+    ))
+    elements.append(Spacer(1, 12))
+
+    def purpose_label(g):
+        if g.get("purpose") == "Sickness / Illness":
+            rec = g.get("recommendation") or ""
+            return f"Sickness{' — ' + rec if rec else ''}"
+        return g.get("purpose", "")
+
+    if not rows:
+        elements.append(Paragraph("No archived records.", styles["Normal"]))
+    else:
+        header = ["Name", "Department", "Purpose", "Status",
+                  "Requested", "Time Left", "Time Returned", "Decided By"]
+        table_rows = [header]
+        for g in rows:
+            table_rows.append([
+                g.get("name", ""),
+                g.get("department", ""),
+                purpose_label(g),
+                g.get("status", "").capitalize(),
+                (g.get("created_at") or "")[:16],
+                (g.get("left_at") or "")[-8:-3] if g.get("left_at") else "—",
+                (g.get("returned_at") or "")[-8:-3] if g.get("returned_at") else "—",
+                g.get("decided_by_name") or g.get("decided_by") or "—",
+            ])
+
+        # Available width in landscape letter minus margins
+        available = page[0] - 72
+        col_widths = [110, 90, 110, 60, 90, 55, 70, 80]
+        tw = sum(col_widths)
+        if tw > available:
+            scale = available / tw
+            col_widths = [w * scale for w in col_widths]
+
+        t = Table(table_rows, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2b8a99")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 1), (-1, -1), 7.5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f1f5f9")]),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t)
+
+    doc.build(elements)
+    buf.seek(0)
+    return buf.getvalue()

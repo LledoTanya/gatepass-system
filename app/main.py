@@ -714,6 +714,19 @@ def api_archive_all(request: Request, db=Depends(get_db)):
         Gatepass.department, Gatepass.created_at.desc()).all()
     return [r.as_dict() for r in rows]
 
+@app.get("/api/gatepasses/archive-all/pdf")
+def api_archive_all_pdf(request: Request, db=Depends(get_db)):
+    """PDF of all archived records — for the guard archive page."""
+    info = auth.session_info(request)
+    if not info or info["role"] != "guard": raise HTTPException(401)
+    rows = db.query(Gatepass).filter(Gatepass.is_archived == True).order_by(
+        Gatepass.department, Gatepass.created_at.desc()).all()
+    data = [r.as_dict() for r in rows]
+    pdf = pdf_slip.build_archive_pdf(data)
+    today = dt.date.today().isoformat()
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="gatepass-archive-{today}.pdf"'})
+
 @app.get("/api/gatepasses/report")
 def api_report(request: Request, month: str | None = None, db=Depends(get_db)):
     info = auth.session_info(request)
@@ -731,6 +744,29 @@ def api_report(request: Request, month: str | None = None, db=Depends(get_db)):
         result[key]["months"][m]["total"] += 1
         result[key]["months"][m]["purposes"][gp.purpose] = result[key]["months"][m]["purposes"].get(gp.purpose, 0) + 1
     return list(result.values())
+
+@app.get("/api/gatepasses/report/pdf")
+def api_report_pdf(request: Request, month: str | None = None, db=Depends(get_db)):
+    """PDF of the monthly report summary — for the dept head/OIC reports page."""
+    info = auth.session_info(request)
+    if not info or info["role"] not in DEPT_ROLES: raise HTTPException(401)
+    dept = info.get("department", "")
+    q = db.query(Gatepass).filter(Gatepass.department == dept)
+    if month: q = q.filter(func.strftime("%Y-%m", Gatepass.created_at) == month)
+    rows = q.order_by(Gatepass.created_at).all()
+    result: dict = {}
+    for gp in rows:
+        key = f"{gp.name} ({gp.employee_id})"
+        m = (gp.created_at or dt.datetime.now()).strftime("%Y-%m")
+        if key not in result: result[key] = {"name": gp.name, "employee_id": gp.employee_id, "months": {}}
+        if m not in result[key]["months"]: result[key]["months"][m] = {"total": 0, "purposes": {}}
+        result[key]["months"][m]["total"] += 1
+        result[key]["months"][m]["purposes"][gp.purpose] = result[key]["months"][m]["purposes"].get(gp.purpose, 0) + 1
+    data = list(result.values())
+    month_label = month or dt.date.today().strftime("%Y-%m")
+    pdf = pdf_slip.build_report_pdf(dept, month_label, data)
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="report-{dept}-{month_label}.pdf"'})
 
 # ---- Nurse approve/deny ---- #
 @app.post("/api/gatepass/{gid}/nurse-approve")
